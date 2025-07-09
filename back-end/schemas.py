@@ -13,6 +13,7 @@ class GameRoom(BaseModel):
     room_id: str
     players: List[Player] = []
     status: str = 'waiting'
+    host: Player
 
 class CreateRoomRequest(BaseModel):
     host_name: str
