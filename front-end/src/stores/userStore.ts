@@ -25,11 +25,14 @@ export const useUserStore = defineStore("user", {
       if (name) {
         this.playerName = name;
       }
+      else {
+        this.playerName = "крутое имя";
+      }
     },
 
     setPlayerName(name: string | undefined) {
       if (name) {
-        this.playerName = name;
+      this.playerName = name;
       localStorage.setItem("mafiaPlayerName", name);
       }
     },

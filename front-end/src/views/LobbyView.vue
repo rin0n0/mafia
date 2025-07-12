@@ -21,18 +21,23 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, computed } from 'vue';
 import { useGameStore } from "@/stores/gameStore";
 import { useUserStore } from "@/stores/userStore";
-import { defineModel } from "vue";
 
 const userStore = useUserStore();
 const gameStore = useGameStore();
 
 const joinRoomId = ref("");
 
-const playerName = defineModel({ type: String });
-userStore.setPlayerName(playerName.value);
+const playerName = computed({
+  get(){
+
+  },
+  set(newValue:string){
+    userStore.setPlayerName(newValue);
+  }
+})
 
 const joinGame = () => {
   if (joinRoomId.value) {
