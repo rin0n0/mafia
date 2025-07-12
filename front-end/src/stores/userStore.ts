@@ -32,6 +32,12 @@ export const useUserStore = defineStore("user", {
 
     setPlayerName(name: string | undefined) {
       if (name) {
+      if (name.length>20) {
+        name = name.slice(0, 20);
+      }
+      if (name.length<3) {
+        name = "крутое имя"
+      }
       this.playerName = name;
       localStorage.setItem("mafiaPlayerName", name);
       }
