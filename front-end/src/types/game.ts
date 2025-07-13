@@ -1,13 +1,16 @@
-export interface Player {
-  client_id: string;
+export interface PlayerPublic {
   name: string;
   is_alive: boolean;
-  role: string | null;
+  is_host: boolean; 
 }
 
-export interface GameRoom {
+export interface GameRoomPublic {
   room_id: string;
-  players: Player[];
-  status: "waiting" | "in_progressing" | "finished";
-  host_id: string;
+  players: PlayerPublic[];
+  status: 'waiting' | 'in_progress' | 'finished'; 
+}
+
+export interface GameRoomPersonalizedResponse {
+  room_details: GameRoomPublic;
+  is_current_user_host: boolean;
 }

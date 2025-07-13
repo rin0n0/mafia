@@ -4,7 +4,7 @@
 
     <div v-if="gameStore.room" class="room-panel">
       <router-link to="/" class="back-to-menu-btn">
-        <span class="arrow">←</span> <!-- ← это HTML-символ стрелки влево -->
+        <span class="arrow">←</span> 
         <span>Главное меню</span>
       </router-link>
       <div class="room-header">
@@ -12,7 +12,6 @@
         <p>Статус: {{ gameStore.room.status }}</p>  
       </div>
       <div class="room-main-content">
-        <!-- Левая колонка: Игроки -->
         <section class="players-section">
           <h2 class="section-title">Игроки: {{ gameStore.room.players.length }}</h2>
           <div class="player-list">
@@ -23,7 +22,7 @@
             >
               <div v-if="player">
                 <div class="player-name">{{player.name}}</div>
-                <div v-if="player.client_id == gameStore.room.host_id" class="player-subtitle">Администратор</div>
+                <div v-if="player.is_host" class="player-subtitle">Администратор</div>
               </div>
             </div>
           </div>

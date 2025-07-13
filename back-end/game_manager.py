@@ -55,21 +55,31 @@ class GameManager:
         
         print(f"Player {player_name} ({player_client_id}) joined room {room_id}")
         return room
-    def create_personalized_room_view(room: GameRoom, for_client_id: str) -> GameRoomPersonalizedResponse:
 
-        public_players = [PlayerPublic(name=p.name, is_alive=p.is_alive) for p in room.players]
-    
-        public_room_details = GameRoomPublic(
-            room_id=room.room_id,
-            players=public_players,
-            status=room.status
+def create_personalized_room_view(room: GameRoom, for_client_id: str) -> GameRoomPersonalizedResponse:
+
+    public_players = []
+    for p in room.players:
+        player_is_host = (p.client_id == room.host_id)
+        public_players.append(
+            PlayerPublic(
+                name=p.name, 
+                is_alive=p.is_alive, 
+                is_host=player_is_host 
+            )
         )
     
-        is_host = (room.host_id == for_client_id)
+    public_room_details = GameRoomPublic(
+        room_id=room.room_id,
+        players=public_players,
+        status=room.status
+    )
     
-        return GameRoomPersonalizedResponse(
-            room_details=public_room_details,
-            is_current_user_host=is_host
-        )
+    is_current_user_host = (room.host_id == for_client_id)
+    
+    return GameRoomPersonalizedResponse(
+        room_details=public_room_details,
+        is_current_user_host=is_current_user_host
+    )
 
 game_manager = GameManager()

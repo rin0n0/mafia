@@ -16,6 +16,7 @@ class GameRoom(BaseModel):
 class PlayerPublic(BaseModel):
     name: str
     is_alive: bool = True
+    is_host: bool = False 
 
 class GameRoomPublic(BaseModel):
     room_id: str
