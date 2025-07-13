@@ -3,7 +3,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from game_manager import game_manager
 from connection_manager import connection_manager
-from schemas import CreateRoomRequest, JoinRoomRequest, GameRoom
+from schemas import (
+    CreateRoomRequest, 
+    JoinRoomRequest, 
+    GameRoomPersonalizedResponse, 
+    GameRoomPublic, 
+)
+
 
 app = FastAPI(title="Mafia Game Backend")
 
@@ -15,24 +21,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.post("/api/rooms", response_model=GameRoom, tags=["Lobby"])
+@app.post("/api/rooms", response_model=GameRoomPersonalizedResponse, tags=["Lobby"])
 def create_room_endpoint(request: CreateRoomRequest):
     room = game_manager.create_room(request.host_name, request.host_client_id)
-    return room
+    return create_personalized_room_view(room, for_client_id=request.host_client_id)
 
-@app.post("/api/rooms/{room_id}/join", response_model=GameRoom, tags=["Lobby"])
+@app.post("/api/rooms/{room_id}/join", response_model=GameRoomPersonalizedResponse, tags=["Lobby"])
 async def join_room_endpoint(room_id: str, request: JoinRoomRequest):
     try:
-        room = game_manager.join_room(room_id, request.player_name, request.player_client_id)
+        internal_room = game_manager.join_room(room_id, request.player_name, request.player_client_id)
+        
+        public_room_view = GameRoomPublic(
+            room_id=internal_room.room_id,
+            players=[PlayerPublic(name=p.name, is_alive=p.is_alive) for p in internal_room.players],
+            status=internal_room.status
+        )
+        await connection_manager.broadcast(room_id, public_room_view.model_dump_json())
 
-        await connection_manager.broadcast(room_id, room.model_dump_json())
-        return room
+        return create_personalized_room_view(internal_room, for_client_id=request.player_client_id)
     except HTTPException as e:
         raise e
 
-@app.get("/api/rooms/{room_id}", response_model=GameRoom, tags=["Lobby"])
-def get_room_details_endpoint(room_id: str):
-    return game_manager.get_room(room_id)
+@app.get("/api/rooms/{room_id}", response_model=GameRoomPersonalizedResponse, tags=["Lobby"])
+def get_room_details_endpoint(room_id: str, client_id: str):
+    internal_room = game_manager.get_room(room_id)
+    return create_personalized_room_view(internal_room, for_client_id=client_id)
 
 
 @app.websocket("/ws/{room_id}/{client_id}")
