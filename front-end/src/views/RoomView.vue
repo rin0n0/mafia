@@ -1,41 +1,74 @@
 <template>
-  <div class="room-view">
-    <div v-if="gameStore.room">
-      <h1>Комната: {{ gameStore.room.room_id }}</h1>
-      <p>Статус: {{ gameStore.room.status }}</p>
+  <div class="room-container">
+    <img src="@/assets/logo.png" alt="Mafia Game Logo" class="logo">
 
-      <h2>Игроки ({{ gameStore.room.players.length }}):</h2>
-      <ul>
-        <li v-for="player in gameStore.room.players" :key="player.client_id">
-          {{ player.name }}
-          <span v-if="player.client_id === gameStore.room.host.client_id">(Хост)</span>
-          <span v-if="player.client_id === userStore.clientId">(Это вы)</span>
-        </li>
-      </ul>
+    <div v-if="gameStore.room" class="room-panel">
+      <router-link to="/" class="back-to-menu-btn">
+        <span class="arrow">←</span> <!-- ← это HTML-символ стрелки влево -->
+        <span>Главное меню</span>
+      </router-link>
+      <div class="room-header">
+        <h1>Комната #{{ gameStore.room.room_id }}</h1>
+        <p>Статус: {{ gameStore.room.status }}</p>  
+      </div>
+      <div class="room-main-content">
+        <!-- Левая колонка: Игроки -->
+        <section class="players-section">
+          <h2 class="section-title">Игроки: {{ gameStore.room.players.length }}</h2>
+          <div class="player-list">
+            <div 
+              v-for="(player, index) in gameStore.room.players" 
+              :key="index" 
+              class="player-slot"
+            >
+              <div v-if="player">
+                <div class="player-name">{{player.name}}</div>
+                <div v-if="player.client_id == gameStore.room.host_id" class="player-subtitle">Администратор</div>
+              </div>
+            </div>
+          </div>
+        </section>
 
-      <div class="connection-status">
-        WS Соединение:
-        <span :class="{
-          connected: gameStore.isConnected,
-          disconnected: !gameStore.isConnected,
-        }">
-          {{ gameStore.isConnected ? "Подключено" : "Отключено" }}
-        </span>
+        <!-- Правая колонка: Настройки -->
+        <section class="settings-section">
+          <h2 class="section-title">Настройки комнаты</h2>
+          <div class="settings-list">
+            <div v-for="setting in roleSettings" :key="setting.role" class="setting-item">
+              <span class="role-name">{{ setting.label }}</span>
+              <div class="counter">
+                <button class="counter-btn" @click="decrementRole(setting)" :disabled="setting.count <= setting.min">
+                  -
+                </button>
+                <span class="counter-value">{{ setting.count }}</span>
+                <button class="counter-btn" @click="incrementRole(setting)">
+                  +
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
       </div>
 
-      <button @click="gameStore.leaveRoom()">Выйти из комнаты</button>
+      <!-- Нижняя кнопка -->
+      <div class="room-actions">
+        <button class="btn start-game-btn">
+          Начать игру
+        </button>
+      </div>
     </div>
-    <div v-else>
-      <p>Загрузка комнаты или комната не найдена...</p>
-      <router-link to="/">Вернуться в лобби</router-link>
-    </div>
+     <div v-else>
+        <p>Загрузка комнаты или комната не найдена...</p>
+        <router-link to="/">Вернуться в лобби</router-link>
+      </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue";
+import { onMounted, onUnmounted, ref, computed, watch } from "vue";
 import { useGameStore } from "@/stores/gameStore";
 import { useUserStore } from "@/stores/userStore";
+import '../assets/styles/global.css'
+import '../assets/styles/room.css'
 
 const gameStore = useGameStore();
 const userStore = useUserStore();
@@ -51,14 +84,27 @@ onMounted(() => {
 onUnmounted(() => {
   gameStore.disconnectWebSocket();
 });
+
+const roleSettings = ref([
+  { role: 'mafia', label: 'Мафия', count: 1, min: 1 },
+  { role: 'citizen', label: 'Мирные', count: 0, min: 0 },
+  { role: 'doctor', label: 'Доктор', count: 0, min: 0 },
+  { role: 'commissar', label: 'Комиссар', count: 0, min: 0 },
+  { role: 'whore', label: 'Потаскуха', count: 0, min: 0 },
+]);
+
+const incrementRole = (setting: { count: number }) => {
+  const totalPlayers = gameStore.room?.players.length;
+  const totalRoles = roleSettings.value.reduce((sum, s) => sum + s.count, 0);
+  if (totalPlayers) if (totalRoles < totalPlayers) {
+    setting.count++;
+  }
+};
+
+const decrementRole = (setting: { count: number; min: number }) => {
+  if (setting.count > setting.min) {
+    setting.count--;
+  }
+};
+
 </script>
-
-<style scoped>
-.connected {
-  color: green;
-}
-
-.disconnected {
-  color: red;
-}
-</style>

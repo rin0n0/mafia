@@ -22,7 +22,5 @@ html, body, #app {
   height: 100%;
   width: 100%;
   font-family: 'Montserrat', sans-serif;
-  /* Можно добавить базовый цвет текста, если нужно */
-  color: #f0f0f0;
 }
 </style>

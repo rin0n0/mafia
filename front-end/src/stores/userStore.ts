@@ -25,9 +25,7 @@ export const useUserStore = defineStore("user", {
       if (name) {
         this.playerName = name;
       }
-      else {
-        this.playerName = "крутое имя";
-      }
+   
     },
 
     setPlayerName(name: string | undefined) {
@@ -36,7 +34,7 @@ export const useUserStore = defineStore("user", {
         name = name.slice(0, 20);
       }
       if (name.length<3) {
-        name = "крутое имя"
+        return
       }
       this.playerName = name;
       localStorage.setItem("mafiaPlayerName", name);

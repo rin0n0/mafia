@@ -21,13 +21,12 @@ class GameManager:
         host_player = Player(
             client_id=host_client_id,
             name=host_name,
-            is_host=True
         )
         
         new_room = GameRoom(
             room_id=room_id,
             players=[host_player],
-            host = host_player,
+            host_id = host_player.client_id,
         )
         
         self.active_rooms[room_id] = new_room

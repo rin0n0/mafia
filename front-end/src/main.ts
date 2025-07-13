@@ -6,6 +6,8 @@ import router from "./router";
 
 import { useUserStore } from "./stores/userStore";
 
+import '@/assets/styles/global.css'; 
+
 const pinia = createPinia();
 const app = createApp(App);
 
