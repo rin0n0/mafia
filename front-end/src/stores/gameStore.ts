@@ -5,7 +5,8 @@ import router from "@/router";
 
 import type { 
   GameRoomPublic, 
-  GameRoomPersonalizedResponse 
+  GameRoomPersonalizedResponse, 
+  Roles
 } from "@/types/game";
 
 const API_BASE = "http://127.0.0.1:8000/api";
@@ -85,6 +86,25 @@ export const useGameStore = defineStore("game", {
         this.error = err.response?.data?.detail || "Ошибка при входе в комнату";
         console.error(this.error);
         alert(this.error); 
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
+
+    setRolesSetting(roles: Roles) {
+      const userStore = useUserStore();
+      if (!this.isHost) return;
+      try {
+        axios.post(`${API_BASE}/rooms/${this.room?.room_id}/roles`,
+          {
+            client_id: userStore.clientId,
+            roles
+          }
+        );
+      } catch (err: any) {
+         this.error = err.response?.data?.detail
+         console.error(this.error);
       } finally {
         this.isLoading = false;
       }

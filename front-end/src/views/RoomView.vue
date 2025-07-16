@@ -28,7 +28,6 @@
           </div>
         </section>
 
-        <!-- Правая колонка: Настройки -->
         <section class="settings-section">
           <h2 class="section-title">Настройки комнаты</h2>
           <div class="settings-list">
@@ -48,9 +47,8 @@
         </section>
       </div>
 
-      <!-- Нижняя кнопка -->
       <div class="room-actions">
-        <button class="btn start-game-btn">
+        <button @click="setRoles" class="btn start-game-btn">
           Начать игру
         </button>
       </div>
@@ -68,6 +66,7 @@ import { useGameStore } from "@/stores/gameStore";
 import { useUserStore } from "@/stores/userStore";
 import '../assets/styles/global.css'
 import '../assets/styles/room.css'
+import type{Roles} from "@/types/game"
 
 const gameStore = useGameStore();
 const userStore = useUserStore();
@@ -91,6 +90,24 @@ const roleSettings = ref([
   { role: 'commissar', label: 'Комиссар', count: 0, min: 0 },
   { role: 'whore', label: 'Потаскуха', count: 0, min: 0 },
 ]);
+
+const createRoleObject = (roleSettings: any[]): Roles => {
+  return roleSettings.reduce((acc, curr) => {
+    acc[curr.role] = curr.count;
+    return acc;
+  }, {
+    mafia: 0,
+    citizen: 0,
+    doctor: 0,
+    commissar: 0,
+    whore: 0
+  });
+};
+
+const setRoles = () => {
+  const roles = createRoleObject(roleSettings.value);
+  gameStore.setRolesSetting(roles);
+};
 
 const incrementRole = (setting: { count: number }) => {
   const totalPlayers = gameStore.room?.players.length;

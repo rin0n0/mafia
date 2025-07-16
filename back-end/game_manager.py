@@ -3,7 +3,7 @@ from typing import Dict
 import random
 import string
 
-from schemas import GameRoom, Player, GameRoomPersonalizedResponse, GameRoomPublic, PlayerPublic
+from schemas import GameRoom, Player, GameRoomPersonalizedResponse, GameRoomPublic, PlayerPublic, Roles
 
 class GameManager:
     def __init__(self):
@@ -55,6 +55,12 @@ class GameManager:
         
         print(f"Player {player_name} ({player_client_id}) joined room {room_id}")
         return room
+    def set_roles_settings(self, room_id: str, client_id: str, new_roles: Roles ) -> GameRoom:
+        room = self.get_room(room_id)
+        if (client_id==room.host_id): 
+            room.roles = new_roles
+            print("roles assigned ", room.roles)
+
 
 def create_personalized_room_view(room: GameRoom, for_client_id: str) -> GameRoomPersonalizedResponse:
 

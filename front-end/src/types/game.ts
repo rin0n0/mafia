@@ -14,3 +14,11 @@ export interface GameRoomPersonalizedResponse {
   room_details: GameRoomPublic;
   is_current_user_host: boolean;
 }
+
+export interface Roles {
+  mafia: number;
+  citizen: number;
+  doctor: number;
+  comissar: number;
+  whore: number;
+} 

@@ -8,7 +8,9 @@ from schemas import (
     JoinRoomRequest, 
     PlayerPublic,
     GameRoomPersonalizedResponse, 
-    GameRoomPublic
+    GameRoomPublic,
+    Roles,
+    SetRolesRequest,
 )
 
 
@@ -56,6 +58,11 @@ async def join_room_endpoint(room_id: str, request: JoinRoomRequest):
 def get_room_details_endpoint(room_id: str, client_id: str):
     internal_room = game_manager.get_room(room_id)
     return create_personalized_room_view(internal_room, for_client_id=client_id)
+
+@app.post("/api/rooms/{room_id}/roles", response_model=None, tags=["Room"])
+def set_roles_settings_endpoint(room_id: str, request: SetRolesRequest):
+    game_manager.set_roles_settings(room_id, request.client_id, request.roles)
+    return 
 
 
 @app.websocket("/ws/{room_id}/{client_id}")
