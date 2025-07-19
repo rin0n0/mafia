@@ -96,7 +96,7 @@ export const useGameStore = defineStore("game", {
       const userStore = useUserStore();
       if (!this.isHost) return;
       try {
-        axios.post(`${API_BASE}/rooms/${this.room?.room_id}/roles`,
+        axios.put(`${API_BASE}/rooms/${this.room?.room_id}/roles`,
           {
             client_id: userStore.clientId,
             roles

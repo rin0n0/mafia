@@ -60,6 +60,14 @@ class GameManager:
         if (client_id==room.host_id): 
             room.roles = new_roles
             print("roles assigned ", room.roles)
+        else print("hack prevented")
+
+    def set_environ(self, room_id: str, client_id: str, environ: str) -> GameRoom:
+        room = self.get_room(room_id)
+        if (client_id==room.host_id): 
+            room.environ = environ
+            print("environ assigned: ", room.environ)
+        else print("hack prevented")
 
 
 def create_personalized_room_view(room: GameRoom, for_client_id: str) -> GameRoomPersonalizedResponse:

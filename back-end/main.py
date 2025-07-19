@@ -3,16 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from game_manager import game_manager, create_personalized_room_view
 from connection_manager import connection_manager
-from schemas import (
-    CreateRoomRequest, 
-    JoinRoomRequest, 
-    PlayerPublic,
-    GameRoomPersonalizedResponse, 
-    GameRoomPublic,
-    Roles,
-    SetRolesRequest,
-)
-
+from schemas import *
 
 app = FastAPI(title="Mafia Game Backend")
 
@@ -59,10 +50,15 @@ def get_room_details_endpoint(room_id: str, client_id: str):
     internal_room = game_manager.get_room(room_id)
     return create_personalized_room_view(internal_room, for_client_id=client_id)
 
-@app.post("/api/rooms/{room_id}/roles", response_model=None, tags=["Room"])
+@app.put("/api/rooms/{room_id}/roles", response_model=None, tags=["Room"])
 def set_roles_settings_endpoint(room_id: str, request: SetRolesRequest):
     game_manager.set_roles_settings(room_id, request.client_id, request.roles)
-    return 
+    return
+     
+@app.put("/api/rooms/{room_id}/environ", response_model=None, tags=["Room"])
+def set_environ_endpoint(room_id: str, request: SetEnvironRequest):
+    game_manager.set_environ(room_id, request.client_id, request.environ)
+    return
 
 
 @app.websocket("/ws/{room_id}/{client_id}")

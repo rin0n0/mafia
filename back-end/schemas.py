@@ -20,6 +20,7 @@ class GameRoom(BaseModel):
     status: str = 'waiting'
     host_id: str  
     roles: Roles = Field(default_factory=Roles)
+    environ: str = None
 
 class PlayerPublic(BaseModel):
     name: str
@@ -42,6 +43,11 @@ class JoinRoomRequest(BaseModel):
 class SetRolesRequest(BaseModel):
     client_id: str
     roles: Roles
+
+class SetEnvironRequest(BaseModel):
+    client_id: str
+    environ: str | None
+
 
 class GameRoomPersonalizedResponse(BaseModel):
     room_details: GameRoomPublic
