@@ -20,7 +20,7 @@ class GameRoom(BaseModel):
     status: str = 'waiting'
     host_id: str  
     roles: Roles = Field(default_factory=Roles)
-    environ: str = None
+    environ: Optional[str] = None
 
 class PlayerPublic(BaseModel):
     name: str
@@ -31,6 +31,8 @@ class GameRoomPublic(BaseModel):
     room_id: str
     players: List[PlayerPublic] = []
     status: str = 'waiting'
+    roles: Roles
+    environ: Optional[str]
 
 class CreateRoomRequest(BaseModel):
     host_name: str

@@ -55,45 +55,56 @@ class GameManager:
         
         print(f"Player {player_name} ({player_client_id}) joined room {room_id}")
         return room
-    def set_roles_settings(self, room_id: str, client_id: str, new_roles: Roles ) -> GameRoom:
+    def set_roles_settings(self, room_id: str, client_id: str, new_roles: Roles) -> GameRoom:
         room = self.get_room(room_id)
-        if (client_id==room.host_id): 
-            room.roles = new_roles
-            print("roles assigned ", room.roles)
-        else print("hack prevented")
+        if client_id != room.host_id:
+            raise HTTPException(status_code=403, detail="Только хост может менять настройки")
+        
+        total_roles = sum(new_roles.model_dump().values())
+        if len(room.players) != total_roles:
+            raise HTTPException(status_code=400, detail=f"Количество ролей ({total_roles}) не совпадает с количеством игроков ({len(room.players)})")
+        
+        if len(room.players) / 3 < new_roles.mafia:
+            raise HTTPException(status_code=400, detail="Мафии не может быть больше трети игроков")
+
+        room.roles = new_roles
+        print(f"Room {room_id} roles updated: {room.roles}")
+        return room
 
     def set_environ(self, room_id: str, client_id: str, environ: str) -> GameRoom:
         room = self.get_room(room_id)
-        if (client_id==room.host_id): 
-            room.environ = environ
-            print("environ assigned: ", room.environ)
-        else print("hack prevented")
+        if client_id != room.host_id:
+            raise HTTPException(status_code=403, detail="Только хост может менять настройки")
+        room.environ = environ
+        print(f"Room {room_id} environ updated: {room.environ}")
+        return room
 
 
-def create_personalized_room_view(room: GameRoom, for_client_id: str) -> GameRoomPersonalizedResponse:
 
-    public_players = []
-    for p in room.players:
-        player_is_host = (p.client_id == room.host_id)
-        public_players.append(
-            PlayerPublic(
-                name=p.name, 
-                is_alive=p.is_alive, 
-                is_host=player_is_host 
-            )
-        )
-    
-    public_room_details = GameRoomPublic(
+def create_public_room_view(room: GameRoom) -> GameRoomPublic:
+    public_players = [
+        PlayerPublic(
+            name=p.name,
+            is_alive=p.is_alive,
+            is_host=(p.client_id == room.host_id)
+        ) for p in room.players
+    ]
+    return GameRoomPublic(
         room_id=room.room_id,
         players=public_players,
-        status=room.status
+        status=room.status,
+        roles=room.roles,
+        environ=room.environ
     )
-    
-    is_current_user_host = (room.host_id == for_client_id)
-    
+
+def create_personalized_room_view(room: GameRoom, for_client_id: str) -> GameRoomPersonalizedResponse:
+    public_view = create_public_room_view(room)
+    is_host = (room.host_id == for_client_id)
     return GameRoomPersonalizedResponse(
-        room_details=public_room_details,
-        is_current_user_host=is_current_user_host
+        room_details=public_view,
+        is_current_user_host=is_host
     )
+
+
 
 game_manager = GameManager()
