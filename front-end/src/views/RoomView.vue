@@ -1,126 +1,204 @@
 <template>
-  <div class="room-container">
-    <img src="@/assets/logo.png" alt="Mafia Game Logo" class="logo">
-
-    <div v-if="gameStore.room" class="room-panel">
-      <router-link to="/" class="back-to-menu-btn">
-        <span class="arrow">←</span> 
-        <span>Главное меню</span>
-      </router-link>
-      <div class="room-header">
+  <div class="room-view">
+    <div v-if="gameStore.room" class="room-content">
+      <div class="header">
+         <router-link to="/" @click="gameStore.leaveRoom" class="back-btn" title="Покинуть комнату">
+          <span class="back-btn-arrow">←</span>
+          <span class="back-btn-text">Назад в лобби</span>
+        </router-link>
         <h1>Комната #{{ gameStore.room.room_id }}</h1>
-        <p>Статус: {{ gameStore.room.status }}</p>  
-      </div>
-      <div class="room-main-content">
-        <section class="players-section">
-          <h2 class="section-title">Игроки: {{ gameStore.room.players.length }}</h2>
-          <div class="player-list">
-            <div 
-              v-for="(player, index) in gameStore.room.players" 
-              :key="index" 
-              class="player-slot"
-            >
-              <div v-if="player">
-                <div class="player-name">{{player.name}}</div>
-                <div v-if="player.is_host" class="player-subtitle">Администратор</div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section class="settings-section">
-          <h2 class="section-title">Настройки комнаты</h2>
-          <div class="settings-list">
-            <div v-for="setting in roleSettings" :key="setting.role" class="setting-item">
-              <span class="role-name">{{ setting.label }}</span>
-              <div class="counter">
-                <button class="counter-btn" @click="decrementRole(setting)" :disabled="setting.count <= setting.min">
-                  -
-                </button>
-                <span class="counter-value">{{ setting.count }}</span>
-                <button class="counter-btn" @click="incrementRole(setting)">
-                  +
-                </button>
-              </div>
-            </div>
-          </div>
-        </section>
       </div>
 
-      <div class="room-actions">
-        <button @click="setRoles" class="btn start-game-btn">
-          Начать игру
+      <div class="room-layout">
+        <PlayerList :players="gameStore.room.players" :roles="gameStore.room.roles" />
+        <SettingsPanel
+          :initial-roles="gameStore.room.roles"
+          :initial-environment="gameStore.room.environ"
+          :is-host="gameStore.isHost"
+          :player-count="gameStore.playerCount"
+          :is-loading="gameStore.isLoading"
+          @update-roles="handleUpdateRoles"
+          @update-environment="handleUpdateEnvironment"
+        />
+      </div>
+      
+      <div class="actions">
+        <button 
+          @click="startGame" 
+          class="btn start-game-btn"
+          :disabled="!gameStore.isHost || !canStartGame"
+        >
+          {{ startGameButtonText }}
         </button>
       </div>
     </div>
-     <div v-else>
-        <p>Загрузка комнаты или комната не найдена...</p>
-        <router-link to="/">Вернуться в лобби</router-link>
-      </div>
+
+    <div v-else-if="gameStore.isLoading" class="state-panel">
+      <p>Загрузка комнаты...</p>
+    </div>
+    <div v-else class="state-panel">
+      <p>Комната не найдена или произошла ошибка.</p>
+      <router-link to="/" class="btn">Вернуться в лобби</router-link>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, computed, watch } from "vue";
-import { useGameStore } from "@/stores/gameStore";
-import { useUserStore } from "@/stores/userStore";
-import '../assets/styles/global.css'
-import '../assets/styles/room.css'
-import type{Roles} from "@/types/game"
+import { onMounted, onUnmounted, computed } from 'vue';
+import { useRoute } from 'vue-router';
+import { useGameStore } from '@/stores/gameStore';
+import type { Roles } from '@/types/game';
+
+import PlayerList from '@/views/PlayerList.vue';
+import SettingsPanel from '@/views/SettingsPanel.vue'; 
 
 const gameStore = useGameStore();
-const userStore = useUserStore();
+const route = useRoute();
 
 onMounted(() => {
-  if (gameStore.room) {
-    gameStore.connectWebSocket();
-  } else {
-    console.error("Состояние комнаты потеряно при обновлении страницы.");
+  const roomId = route.params.id as string;
+  if (!gameStore.room || gameStore.room.room_id !== roomId) {
+    gameStore.fetchRoomDetails(roomId);
   }
+  gameStore.connectWebSocket();
 });
 
 onUnmounted(() => {
   gameStore.disconnectWebSocket();
 });
 
-const roleSettings = ref([
-  { role: 'mafia', label: 'Мафия', count: 1, min: 1 },
-  { role: 'citizen', label: 'Мирные', count: 0, min: 0 },
-  { role: 'doctor', label: 'Доктор', count: 0, min: 0 },
-  { role: 'commissar', label: 'Комиссар', count: 0, min: 0 },
-  { role: 'whore', label: 'Потаскуха', count: 0, min: 0 },
-]);
-
-const createRoleObject = (roleSettings: any[]): Roles => {
-  return roleSettings.reduce((acc, curr) => {
-    acc[curr.role] = curr.count;
-    return acc;
-  }, {
-    mafia: 0,
-    citizen: 0,
-    doctor: 0,
-    commissar: 0,
-    whore: 0
-  });
+const handleUpdateRoles = (newRoles: Roles) => {
+  gameStore.setRoles(newRoles);
 };
 
-const setRoles = () => {
-  const roles = createRoleObject(roleSettings.value);
-  gameStore.setRolesSetting(roles);
+const handleUpdateEnvironment = (newEnvironment: string | null) => {
+  gameStore.setEnvironment(newEnvironment);
 };
 
-const incrementRole = (setting: { count: number }) => {
-  const totalPlayers = gameStore.room?.players.length;
-  const totalRoles = roleSettings.value.reduce((sum, s) => sum + s.count, 0);
-  if (totalPlayers) if (totalRoles < totalPlayers) {
-    setting.count++;
+const canStartGame = computed(() => {
+  if (!gameStore.room) return false;
+  const totalRoles = Object.values(gameStore.room.roles).reduce((sum, count) => sum + count, 0);
+  return gameStore.room.players.length === totalRoles && totalRoles > 0;
+});
+
+const startGameButtonText = computed(() => {
+  if (!canStartGame.value) {
+    return 'Распределите роли';
+  }
+  return 'Начать игру';
+});
+
+const startGame = () => {
+  if (gameStore.isHost && canStartGame.value) {
+    console.log("Отправляем запрос на старт игры!");
   }
 };
-
-const decrementRole = (setting: { count: number; min: number }) => {
-  if (setting.count > setting.min) {
-    setting.count--;
-  }
-};
-
 </script>
+
+/* src/views/RoomView.vue */
+<style scoped>
+.room-view {
+  background-image: url('@/assets/background_light.png');
+  background-size: cover;
+  background-position: center center;
+  min-height: 100vh;
+  padding: 20px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.room-content {
+  width: 100%;
+  max-width: 500px; 
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  transition: max-width 0.3s ease; 
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 100%;
+}
+
+.header h1 {
+  margin: 0;
+  font-size: 1.8rem;
+}
+
+.back-btn {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--secondary-text-color);
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  transition: all 0.2s ease;
+}
+
+.back-btn:hover {
+  color: var(--primary-text-color);
+  background-color: rgba(0,0,0,0.1);
+  border-radius: 8px;
+}
+
+.back-btn-arrow {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.back-btn-text {
+  display: none;
+}
+
+.room-layout {
+  display: flex;
+  flex-direction: column; 
+  gap: 1.5rem;
+}
+
+.actions {
+  width: 100%;
+}
+
+.state-panel {
+  text-align: center;
+  padding-top: 40vh;
+}
+
+@media (min-width: 992px) {
+  .room-view {
+    align-items: center;
+  }
+  .room-content {
+    max-width: 1100px; 
+  }
+
+  .room-layout {
+    flex-direction: row;
+    align-items: stretch;
+    gap: 2rem;
+  }
+
+  .room-layout > :first-child { 
+    flex: 0 0 350px; 
+  }
+
+  .room-layout > :last-child { 
+    flex: 1; 
+  }
+  .back-btn-text {
+    display: inline;
+  }
+}
+</style>

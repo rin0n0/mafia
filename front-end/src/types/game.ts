@@ -8,6 +8,8 @@ export interface GameRoomPublic {
   room_id: string;
   players: PlayerPublic[];
   status: 'waiting' | 'in_progress' | 'finished'; 
+  roles: Roles;          
+  environ: string | null;  
 }
 
 export interface GameRoomPersonalizedResponse {

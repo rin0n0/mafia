@@ -31,6 +31,10 @@ export const useGameStore = defineStore("game", {
     error: null,
   }),
 
+  getters: {
+    playerCount: (state): number => state.room?.players.length || 0,
+  },
+
   actions: {
     _handleSuccessfulJoin(response: GameRoomPersonalizedResponse) {
       this.room = response.room_details;
@@ -92,19 +96,27 @@ export const useGameStore = defineStore("game", {
     },
 
 
-    setRolesSetting(roles: Roles) {
+    async setRoles(newRoles: Roles) {
       const userStore = useUserStore();
-      if (!this.isHost) return;
+      if (!this.isHost || !this.room || !userStore.clientId) return;
+      
+      this.isLoading = true;
+      this.error = null;
+
       try {
-        axios.put(`${API_BASE}/rooms/${this.room?.room_id}/roles`,
-          {
-            client_id: userStore.clientId,
-            roles
+        await axios.put(
+          `${API_BASE}/rooms/${this.room.room_id}/roles`,
+          { roles: newRoles },
+          { 
+            headers: {
+              'X-Client-ID': userStore.clientId 
+            }
           }
         );
       } catch (err: any) {
-         this.error = err.response?.data?.detail
+         this.error = err.response?.data?.detail || "Ошибка при смене ролей";
          console.error(this.error);
+         alert(this.error);
       } finally {
         this.isLoading = false;
       }
@@ -132,6 +144,32 @@ export const useGameStore = defineStore("game", {
         } finally {
             this.isLoading = false;
         }
+    },
+
+    async setEnvironment(newEnviron: string | null) {
+      const userStore = useUserStore();
+      if (!this.isHost || !this.room || !userStore.clientId) return;
+      
+      this.isLoading = true;
+      this.error = null;
+
+      try {
+        await axios.put(
+          `${API_BASE}/rooms/${this.room.room_id}/environ`,
+          { environ: newEnviron },
+          { 
+            headers: {
+              'X-Client-ID': userStore.clientId 
+            }
+          }
+        );
+      } catch (err: any) {
+         this.error = err.response?.data?.detail || "Ошибка при смене сеттинга";
+         console.error(this.error);
+         alert(this.error);
+      } finally {
+        this.isLoading = false;
+      }
     },
 
     connectWebSocket() {

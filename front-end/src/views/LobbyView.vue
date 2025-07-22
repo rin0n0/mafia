@@ -56,8 +56,6 @@ import { ref, computed, watch } from 'vue';
 import { useUserStore } from '@/stores/userStore';
 import { useGameStore } from '@/stores/gameStore';
 
-import '../assets/styles/lobby.css'; 
-
 
 const userStore = useUserStore();
 const gameStore = useGameStore();
@@ -80,3 +78,62 @@ const joinGame = () => {
   }
 };
 </script>
+
+<style scoped>
+.lobby-container {
+  background-image: url('@/assets/background_light.png');
+  background-size: cover;
+  background-position: center center;
+  min-height: 100vh;
+  padding: 20px;
+  display: flex; 
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+}
+
+
+.lobby-content {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.logo {
+  width: 100%;
+  max-width: 250px;
+  margin-bottom: 2.5rem;
+}
+
+.name-entry-block,
+.main-lobby-block {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.room-code-input {
+  text-transform: uppercase;
+  letter-spacing: 0.5em; 
+  padding-left: calc(15px + 0.25em);
+}
+
+.player-feedback {
+    width: 100%;
+    text-align: right;
+    padding-right: 5px;
+    height: 20px;
+    margin-top: 5px;
+}
+.char-counter {
+    font-size: 0.9em;
+    color: rgba(255, 255, 255, 0.6);
+}
+.char-counter.error {
+    color: var(--error-color);
+    font-weight: bold;
+}
+</style>
