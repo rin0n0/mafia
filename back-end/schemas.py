@@ -43,11 +43,9 @@ class JoinRoomRequest(BaseModel):
     player_client_id: str
 
 class SetRolesRequest(BaseModel):
-    client_id: str
     roles: Roles
 
 class SetEnvironRequest(BaseModel):
-    client_id: str
     environ: str | None
 
 
