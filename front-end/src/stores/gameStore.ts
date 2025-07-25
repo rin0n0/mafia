@@ -95,6 +95,31 @@ export const useGameStore = defineStore("game", {
       }
     },
 
+    async fetchRoomDetails(roomId: string) {
+    const userStore = useUserStore();
+    if (!userStore.clientId) {
+      router.push({ name: 'lobby', query: { room: roomId } });
+      return;
+    }
+
+    this.isLoading = true;
+    this.error = null;
+
+    try {
+      const response = await axios.get<GameRoomPersonalizedResponse>(`${API_BASE}/rooms/${roomId}`, {
+        headers: {
+          'X-Client-ID': userStore.clientId
+        }
+      });
+      this._handleSuccessfulJoin(response.data);
+    } catch (err: any) {
+      this.error = "Вы не являетесь участником этой комнаты. Войдите, чтобы присоединиться.";
+      console.error("Failed to fetch room details:", err.response?.data?.detail || err.message);
+      router.push({ name: 'lobby', query: { room: roomId } });
+    } finally {
+      this.isLoading = false;
+    }
+  },
 
     async setRoles(newRoles: Roles) {
       const userStore = useUserStore();
@@ -120,30 +145,6 @@ export const useGameStore = defineStore("game", {
       } finally {
         this.isLoading = false;
       }
-    },
-
-
-    async fetchRoomDetails(roomId: string) {
-        const userStore = useUserStore();
-        if (!userStore.clientId) return;
-
-        this.isLoading = true;
-        this.error = null;
-
-        try {
-            const response = await axios.get<GameRoomPersonalizedResponse>(`${API_BASE}/rooms/${roomId}`, {
-                headers: {
-                    'X-Client-ID': userStore.clientId
-                }
-            });
-            this._handleSuccessfulJoin(response.data);
-        } catch (err: any) {
-            this.error = err.response?.data?.detail || "Не удалось загрузить данные комнаты";
-            console.error(this.error);
-            router.push('/');
-        } finally {
-            this.isLoading = false;
-        }
     },
 
     async setEnvironment(newEnviron: string | null) {

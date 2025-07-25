@@ -2,7 +2,7 @@
   <div class="room-view">
     <div v-if="gameStore.room" class="room-content">
       <div class="header">
-         <router-link to="/" @click="gameStore.leaveRoom" class="back-btn" title="Покинуть комнату">
+        <router-link to="/" @click="gameStore.leaveRoom" class="back-btn" title="Покинуть комнату">
           <span class="back-btn-arrow">←</span>
           <span class="back-btn-text">Назад в лобби</span>
         </router-link>
@@ -11,23 +11,13 @@
 
       <div class="room-layout">
         <PlayerList :players="gameStore.room.players" :roles="gameStore.room.roles" />
-        <SettingsPanel
-          :initial-roles="gameStore.room.roles"
-          :initial-environment="gameStore.room.environ"
-          :is-host="gameStore.isHost"
-          :player-count="gameStore.playerCount"
-          :is-loading="gameStore.isLoading"
-          @update-roles="handleUpdateRoles"
-          @update-environment="handleUpdateEnvironment"
-        />
+        <SettingsPanel :initial-roles="gameStore.room.roles" :initial-environment="gameStore.room.environ"
+          :is-host="gameStore.isHost" :player-count="gameStore.playerCount" :is-loading="gameStore.isLoading"
+          @update-roles="handleUpdateRoles" @update-environment="handleUpdateEnvironment" />
       </div>
-      
+
       <div class="actions">
-        <button 
-          @click="startGame" 
-          class="btn start-game-btn"
-          :disabled="!gameStore.isHost || !canStartGame"
-        >
+        <button @click="startGame" class="btn start-game-btn" :disabled="!gameStore.isHost || !canStartGame">
           {{ startGameButtonText }}
         </button>
       </div>
@@ -50,17 +40,20 @@ import { useGameStore } from '@/stores/gameStore';
 import type { Roles } from '@/types/game';
 
 import PlayerList from '@/views/PlayerList.vue';
-import SettingsPanel from '@/views/SettingsPanel.vue'; 
+import SettingsPanel from '@/views/SettingsPanel.vue';
 
 const gameStore = useGameStore();
 const route = useRoute();
 
-onMounted(() => {
+onMounted(async () => {
   const roomId = route.params.id as string;
+
   if (!gameStore.room || gameStore.room.room_id !== roomId) {
-    gameStore.fetchRoomDetails(roomId);
+    await gameStore.fetchRoomDetails(roomId);
   }
-  gameStore.connectWebSocket();
+  if (gameStore.room?.room_id == roomId) {
+    gameStore.connectWebSocket();
+  }
 });
 
 onUnmounted(() => {
@@ -110,11 +103,11 @@ const startGame = () => {
 
 .room-content {
   width: 100%;
-  max-width: 500px; 
+  max-width: 500px;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  transition: max-width 0.3s ease; 
+  transition: max-width 0.3s ease;
 }
 
 .header {
@@ -148,7 +141,7 @@ const startGame = () => {
 
 .back-btn:hover {
   color: var(--primary-text-color);
-  background-color: rgba(0,0,0,0.1);
+  background-color: rgba(0, 0, 0, 0.1);
   border-radius: 8px;
 }
 
@@ -163,7 +156,7 @@ const startGame = () => {
 
 .room-layout {
   display: flex;
-  flex-direction: column; 
+  flex-direction: column;
   gap: 1.5rem;
 }
 
@@ -180,8 +173,9 @@ const startGame = () => {
   .room-view {
     align-items: center;
   }
+
   .room-content {
-    max-width: 1100px; 
+    max-width: 1100px;
   }
 
   .room-layout {
@@ -190,13 +184,14 @@ const startGame = () => {
     gap: 2rem;
   }
 
-  .room-layout > :first-child { 
-    flex: 0 0 350px; 
+  .room-layout> :first-child {
+    flex: 0 0 350px;
   }
 
-  .room-layout > :last-child { 
-    flex: 1; 
+  .room-layout> :last-child {
+    flex: 1;
   }
+
   .back-btn-text {
     display: inline;
   }

@@ -1,4 +1,5 @@
 from fastapi import HTTPException
+import asyncio
 from typing import Dict
 import random
 import string
@@ -8,6 +9,7 @@ from schemas import GameRoom, Player, GameRoomPersonalizedResponse, GameRoomPubl
 class GameManager:
     def __init__(self):
         self.active_rooms: Dict[str, GameRoom] = {}
+        self.MAX_ROOMS_PER_HOST = 3
 
     def _generate_room_id(self) -> str:
         while True:
@@ -17,6 +19,17 @@ class GameManager:
 
     def create_room(self, host_name: str, host_client_id: str) -> GameRoom:
         room_id = self._generate_room_id()
+
+        current_host_rooms = 0
+        for room in self.active_rooms.values():
+            if room.host_id == host_client_id:
+                current_host_rooms += 1
+        
+        if current_host_rooms >= self.MAX_ROOMS_PER_HOST:
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Вы уже создали максимальное количество комнат ({self.MAX_ROOMS_PER_HOST})."
+            )
         
         host_player = Player(
             client_id=host_client_id,
@@ -55,6 +68,44 @@ class GameManager:
         
         print(f"Player {player_name} ({player_client_id}) joined room {room_id}")
         return room
+    
+    def set_broadcast_callback(self, callback):
+        self._broadcast_callback = callback
+    
+    def schedule_player_removal(self, room_id: str, client_id: str, delay: int = 5):
+        asyncio.create_task(self._remove_player_after_delay(room_id, client_id, delay))
+
+    async def _remove_player_after_delay(self, room_id: str, client_id: str, delay: int):
+        print(f"Player {client_id} disconnected. Removal for room {room_id} scheduled in {delay}s.")
+        await asyncio.sleep(delay)
+
+        from connection_manager import connection_manager
+
+        try:
+            room = self.get_room(room_id)
+            
+            if connection_manager.is_client_connected(room_id, client_id):
+                print(f"Player {client_id} reconnected to {room_id}. Removal cancelled.")
+                return
+
+            print(f"Timeout expired. Removing player {client_id} from room {room_id}.")
+            room.players = [p for p in room.players if p.client_id != client_id]
+            
+            if not room.players:
+                del self.active_rooms[room_id]
+                print(f"Room {room_id} is empty and has been deleted.")
+            else:
+                if room.host_id == client_id:
+                    new_host = room.players[0]
+                    room.host_id = new_host.client_id
+                    print(f"Host left. New host for room {room_id} is {new_host.name}.")
+                if hasattr(self, '_broadcast_callback'):
+                    await self._broadcast_callback(room_id)
+        except (HTTPException, KeyError):
+            print(f"Room {room_id} no longer exists. No action needed for player {client_id}.")
+            pass
+
+
     def set_roles_settings(self, room_id: str, client_id: str, new_roles: Roles) -> GameRoom:
         room = self.get_room(room_id)
         if client_id != room.host_id:
