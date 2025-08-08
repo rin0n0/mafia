@@ -110,7 +110,7 @@ a{
 
 .btn-outline:hover {
   background-color: var(--input-bg-color);
-  border-color: var(--primary-brand-color);
+  border-color: var(--primary-brand-hover-color);
   color: var(--primary-text-color);
 }
 

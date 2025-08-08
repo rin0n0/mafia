@@ -145,15 +145,25 @@ def create_public_room_view(room: GameRoom) -> GameRoomPublic:
         players=public_players,
         status=room.status,
         roles=room.roles,
-        environ=room.environ
+        environ=room.environ,
+        phase=room.phase,             
+        day_number=room.day_number
     )
 
 def create_personalized_room_view(room: GameRoom, for_client_id: str) -> GameRoomPersonalizedResponse:
     public_view = create_public_room_view(room)
     is_host = (room.host_id == for_client_id)
+    
+    current_player_role = None
+    for player in room.players:
+        if player.client_id == for_client_id:
+            current_player_role = player.role
+            break
+
     return GameRoomPersonalizedResponse(
         room_details=public_view,
-        is_current_user_host=is_host
+        is_current_user_host=is_host,
+        my_role=current_player_role
     )
 
 

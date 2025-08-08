@@ -5,17 +5,11 @@
       <div v-for="setting in roleSettings" :key="setting.role" class="setting-item">
         <span class="role-name">{{ setting.label }}</span>
         <div class="counter">
-          <button 
-            class="counter-btn" 
-            @click="decrementRole(setting.role as keyof Roles)"
-            :disabled="!isHost || setting.count <= setting.min"
-          >-</button>
+          <button class="counter-btn" @click="decrementRole(setting.role as keyof Roles)"
+            :disabled="!isHost || setting.count <= setting.min">-</button>
           <span class="counter-value">{{ setting.count }}</span>
-          <button 
-            class="counter-btn" 
-            @click="incrementRole(setting.role as keyof Roles)"
-            :disabled="!isHost || totalRoles >= playerCount"
-          >+</button>
+          <button class="counter-btn" @click="incrementRole(setting.role as keyof Roles)"
+            :disabled="!isHost || totalRoles >= playerCount">+</button>
         </div>
       </div>
     </div>
@@ -28,7 +22,7 @@
 
 <script setup lang="ts">
 import type { Roles } from '@/types/game';
-import {ref, watch, defineProps, computed, defineEmits} from 'vue'
+import { ref, watch, defineProps, computed, defineEmits } from 'vue'
 
 const props = defineProps<{
   initialRoles: Roles,
@@ -103,7 +97,8 @@ const resetChanges = () => {
   margin-bottom: 1.5rem;
 }
 
-.setting-item, .counter {
+.setting-item,
+.counter {
   display: flex;
   align-items: center;
 }
@@ -119,7 +114,8 @@ const resetChanges = () => {
   font-size: 1rem;
 }
 
-.counter-btn, .counter-value {
+.counter-btn,
+.counter-value {
   background: var(--input-bg-color);
   border: 1px solid var(--input-border-color);
   color: var(--primary-text-color);
@@ -130,20 +126,44 @@ const resetChanges = () => {
   font-weight: 700;
   height: 45px;
 }
-.counter-btn { width: 45px; cursor: pointer; transition: background-color 0.2s; }
-.counter-btn:hover { background-color: #3e1e1e; }
-.counter-btn:first-child { border-radius: 8px 0 0 8px; }
-.counter-btn:last-child { border-radius: 0 8px 8px 0; }
-.counter-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-.counter-value { width: 50px; border-left: none; border-right: none; }
+
+.counter-btn {
+  width: 45px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.counter-btn:hover {
+  background-color: #3e1e1e;
+}
+
+.counter-btn:first-child {
+  border-radius: 8px 0 0 8px;
+}
+
+.counter-btn:last-child {
+  border-radius: 0 8px 8px 0;
+}
+
+.counter-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.counter-value {
+  width: 50px;
+  border-left: none;
+  border-right: none;
+}
 
 .actions {
   display: flex;
   gap: 1rem;
-  margin-top: auto; 
+  margin-top: auto;
 }
+
 .btn-secondary {
   background-color: var(--input-bg-color);
-  border: 2px solid var(--primary-brand-color);
+  border: 2px solid var(--primary-brand-hover-color);
 }
 </style>
