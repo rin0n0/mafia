@@ -87,9 +87,12 @@ class SetRolesRequest(BaseModel):
 class SetEnvironRequest(BaseModel):
     environ: str | None
 
+class WsMessage(BaseModel):
+    type: str
+    payload: Dict[str, Any]
 
 class GameRoomPersonalizedResponse(BaseModel):
     room_details: GameRoomPublic
     is_current_user_host: bool
     my_role: Optional[PlayerRole] = None
-    
+

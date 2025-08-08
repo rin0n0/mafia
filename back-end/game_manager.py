@@ -4,7 +4,7 @@ from typing import Dict
 import random
 import string
 
-from schemas import GameRoom, Player, GameRoomPersonalizedResponse, GameRoomPublic, PlayerPublic, Roles
+from schemas import GameRoom, Player, GameRoomPersonalizedResponse, GameRoomPublic, PlayerPublic, Roles, RoomStatus, PlayerRole, GamePhase
 
 class GameManager:
     def __init__(self):
@@ -67,6 +67,40 @@ class GameManager:
         room.players.append(new_player)
         
         print(f"Player {player_name} ({player_client_id}) joined room {room_id}")
+        return room
+    
+    def start_game(self, room_id: str, client_id: str) -> GameRoom:
+        room = self.get_room(room_id)
+
+        if client_id != room.host_id:
+            raise HTTPException(status_code=403, detail="Только хост может начать игру")
+
+        if room.status != RoomStatus.WAITING:
+            raise HTTPException(status_code=400, detail="Игра уже началась или завершена")
+
+        total_roles = sum(room.roles.model_dump().values())
+        if len(room.players) != total_roles:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Количество игроков ({len(room.players)}) не совпадает с количеством ролей ({total_roles})"
+            )
+        
+        roles_to_distribute = []
+        for role, count in room.roles.model_dump().items():
+            roles_to_distribute.extend([PlayerRole(role)] * count)
+        
+        random.shuffle(roles_to_distribute)
+        
+        shuffled_players = random.sample(room.players, len(room.players))
+        
+        for player, role in zip(shuffled_players, roles_to_distribute):
+            player.role = role
+        
+        room.status = RoomStatus.IN_PROGRESS
+        room.phase = GamePhase.INTRODUCTION_NIGHT
+        room.day_number = 1
+        
+        print(f"Game started in room {room_id}. Roles distributed.")
         return room
     
     def set_broadcast_callback(self, callback):

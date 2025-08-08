@@ -1,8 +1,9 @@
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header, Request 
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Header, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+import json
 
 from game_manager import *
 from connection_manager import connection_manager
@@ -12,7 +13,11 @@ async def broadcast_room_update(room_id: str):
     try:
         room = game_manager.get_room(room_id)
         public_view = create_public_room_view(room)
-        await connection_manager.broadcast(room_id, public_view.model_dump_json())
+        public_message = WsMessage(
+            type="public_state_update",
+            payload=public_view.model_dump()
+        )
+        await connection_manager.broadcast(room_id, public_message.model_dump_json())
     except HTTPException:
         print(f"Cannot broadcast update for non-existent room {room_id}")
 
@@ -45,7 +50,11 @@ async def join_room_endpoint(room_id: str, request_body: JoinRoomRequest, reques
     try:
         internal_room = game_manager.join_room(room_id, request_body.player_name, request_body.player_client_id)
         public_view = create_public_room_view(internal_room)
-        await connection_manager.broadcast(room_id, public_view.model_dump_json())
+        public_message = WsMessage(
+            type="public_state_update",
+            payload=public_view.model_dump()
+        )
+        await connection_manager.broadcast(room_id, public_message.model_dump_json())
         return create_personalized_room_view(internal_room, for_client_id=request_body.player_client_id)
     except HTTPException as e:
         raise e
@@ -61,23 +70,53 @@ def get_room_details_endpoint(room_id: str, client_id: str = Header(..., alias="
         )
     return create_personalized_room_view(internal_room, for_client_id=client_id)
 
-@app.put("/api/rooms/{room_id}/roles", response_model=GameRoomPublic, tags=["Room Settings"])
+@app.put("/api/rooms/{room_id}/roles", status_code=status.HTTP_200_OK, tags=["Room Settings"])
 async def set_roles_settings_endpoint(room_id: str, request_body: SetRolesRequest, client_id: str = Header(..., alias="X-Client-ID")):
     try:
         internal_room = game_manager.set_roles_settings(room_id, client_id, request_body.roles)
         public_view = create_public_room_view(internal_room)
-        await connection_manager.broadcast(room_id, public_view.model_dump_json())
-        return public_view
+        public_message = WsMessage(
+            type="public_state_update",
+            payload=public_view.model_dump()
+        )
+        await connection_manager.broadcast(room_id, public_message.model_dump_json())
+        return {"status": "success", "message": "Roles updated"}
     except HTTPException as e:
         raise e
      
-@app.put("/api/rooms/{room_id}/environ", response_model=GameRoomPublic, tags=["Room Settings"])
+@app.put("/api/rooms/{room_id}/environ", status_code=status.HTTP_200_OK, tags=["Room Settings"])
 async def set_environ_endpoint(room_id: str, request_body: SetEnvironRequest, client_id: str = Header(..., alias="X-Client-ID")):
     try:
         internal_room = game_manager.set_environ(room_id, client_id, request_body.environ)
         public_view = create_public_room_view(internal_room)
-        await connection_manager.broadcast(room_id, public_view.model_dump_json())
-        return public_view
+        public_message = WsMessage(
+            type="public_state_update",
+            payload=public_view.model_dump()
+        )
+        await connection_manager.broadcast(room_id, public_message.model_dump_json())
+        return {"status": "success", "message": "Environment updated"}
+    except HTTPException as e:
+        raise e
+    
+    
+@app.post("/api/rooms/{room_id}/start", tags=["Game"])
+async def start_game_endpoint(room_id: str, client_id: str = Header(..., alias="X-Client-ID")):
+    try:
+        internal_room = game_manager.start_game(room_id, client_id)
+
+        for player in internal_room.players:
+            personalized_view = create_personalized_room_view(internal_room, for_client_id=player.client_id)
+
+            personal_message = WsMessage(
+                type="personal_state_update",
+                payload=personalized_view.model_dump()
+            )
+            await connection_manager.send_personal_message(
+                room_id, player.client_id, personal_message.model_dump_json()
+            )
+        
+        return {"status": "success", "message": "Game started"}
+
     except HTTPException as e:
         raise e
 

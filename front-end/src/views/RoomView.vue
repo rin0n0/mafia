@@ -84,6 +84,7 @@ const startGameButtonText = computed(() => {
 const startGame = () => {
   if (gameStore.isHost && canStartGame.value) {
     console.log("Отправляем запрос на старт игры!");
+    gameStore.startGame();
   }
 };
 </script>

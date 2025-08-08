@@ -20,11 +20,18 @@ class ConnectionManager:
 
     async def broadcast(self, room_id: str, message: str):
         if room_id in self.active_connections:
-            for client_id, connection in self.active_connections[room_id].items():
-                await connection.send_text(message)
+            for client_id, connection in list(self.active_connections[room_id].items()):
+                try:
+                    await connection.send_text(message)
+                except Exception as e:
+                    print(f"Failed to send message to {client_id}: {e}")
 
     def is_client_connected(self, room_id: str, client_id: str) -> bool:
-        """Проверяет, есть ли активное соединение у клиента в комнате."""
         return room_id in self.active_connections and client_id in self.active_connections[room_id]
+    
+    async def send_personal_message(self, room_id: str, client_id: str, message: str):
+        if room_id in self.active_connections and client_id in self.active_connections[room_id]:
+            websocket = self.active_connections[room_id][client_id]
+            await websocket.send_text(message)
 
 connection_manager = ConnectionManager()
