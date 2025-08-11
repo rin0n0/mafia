@@ -1,43 +1,29 @@
 <template>
   <div class="settings-panel">
     <div class="tabs">
-      <button 
-        :class="['tab-btn', { active: activeTab === 'roles' }]"
-        @click="activeTab = 'roles'"
-      >
+      <button :class="['tab-btn', { active: activeTab === 'roles' }]" @click="activeTab = 'roles'">
         Настройки Ролей
       </button>
-      <button 
-        :class="['tab-btn', { active: activeTab === 'environment' }]"
-        @click="activeTab = 'environment'"
-      >
+      <button :class="['tab-btn', { active: activeTab === 'environment' }]" @click="activeTab = 'environment'">
         Сеттинг Игры
       </button>
     </div>
 
     <div class="tab-content">
       <div v-if="activeTab === 'roles'">
-        <RoleSettings 
-          :initial-roles="initialRoles"
-          :is-host="isHost"
-          :player-count="playerCount"
-          @update-roles="emit('update-roles', $event)"
-        />
+        <RoleSettings :initial-roles="initialRoles" :is-host="isHost" :player-count="playerCount"
+          @update-roles="emit('update-roles', $event)" />
       </div>
       <div v-if="activeTab === 'environment'">
-        <EnvironmentSettings
-          :initial-environment="initialEnvironment"
-          :is-host="isHost"
-          :is-loading="isLoading"
-          @update-environment="emit('update-environment', $event)"
-        />
+        <EnvironmentSettings :initial-environment="initialEnvironment" :is-host="isHost" :is-loading="isLoading"
+          @update-environment="emit('update-environment', $event)" />
       </div>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref ,defineEmits,defineProps} from 'vue';
+import { ref } from 'vue';
 import type { Roles } from '@/types/game';
 
 import RoleSettings from './RoleSettings.vue';
@@ -87,17 +73,17 @@ const activeTab = ref<'roles' | 'environment'>('roles');
   cursor: pointer;
   transition: all 0.3s ease;
   border-bottom: 4px solid transparent;
-  transform: translateY(2px); 
+  transform: translateY(2px);
 }
 
 .tab-content {
-  flex-grow: 1; 
-  display: flex; 
+  flex-grow: 1;
+  display: flex;
 }
 
-.tab-content > div {
-  flex-grow: 1; 
-  display: flex; 
+.tab-content>div {
+  flex-grow: 1;
+  display: flex;
 }
 
 .tab-btn.active {

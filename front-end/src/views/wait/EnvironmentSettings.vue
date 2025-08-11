@@ -4,32 +4,28 @@
     <p class="section-description">
       Опишите мир, в котором происходит игра. Ведущий будет использовать это для создания атмосферы.
     </p>
-    <textarea
-      v-model="localEnviron"
-      class="form-input environment-input"
-      placeholder="Например: Гангстерский Чикаго 30-х"
-      :disabled="!isHost"
-      rows="3"
-    ></textarea>
-    
-    <div v-if="isHost && hasChanges" class="actions">
-      <button class="btn" @click="applyChanges" :disabled="isLoading">
-        Применить
-      </button>
-      <button class="btn btn-outline" @click="resetChanges">
-        Сбросить
-      </button>
-    </div>
+    <textarea v-model="localEnviron" class="form-input environment-input"
+      placeholder="Например: Гангстерский Чикаго 30-х" :disabled="!isHost" rows="3"></textarea>
+    <transition name="fade">
+      <div v-if="isHost && hasChanges" class="actions">
+        <button class="btn" @click="applyChanges" :disabled="isLoading">
+          Применить
+        </button>
+        <button class="btn btn-outline" @click="resetChanges">
+          Сбросить
+        </button>
+      </div>
+    </transition>
   </section>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watch, defineProps, defineEmits} from 'vue';
+import { ref, computed, watch } from 'vue';
 
 const props = defineProps<{
   initialEnvironment: string | null;
   isHost: boolean;
-  isLoading: boolean; 
+  isLoading: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -81,7 +77,7 @@ const resetChanges = () => {
   text-align: left;
   font-size: 1rem;
   font-weight: 500;
-  resize: vertical; 
+  resize: vertical;
   resize: none;
   min-height: 251.7px;
 }
@@ -89,17 +85,30 @@ const resetChanges = () => {
 .actions {
   display: flex;
   gap: 1rem;
-  margin-top: auto; 
+  margin-top: auto;
+  transition: all 0.3s ease;
 }
 
-.btn-secondary {
-  background-color: var(--input-bg-color);
-  color: var(--primary-text-color);
-  border: 2px solid var(--primary-brand-color);
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
 }
 
-.btn:disabled, .btn-secondary:disabled {
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+.btn:disabled,
+.btn-secondary:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+@media (max-width: 992px) {
+  .btn {
+    font-size: 0.8rem;
+  }
 }
 </style>

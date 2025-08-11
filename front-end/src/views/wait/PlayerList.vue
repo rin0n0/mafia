@@ -2,21 +2,13 @@
   <section class="players-section">
     <h2 class="section-title">Игроки: {{ players.length }}</h2>
     <div class="player-list">
-      <div 
-        v-for="player in players" 
-        :key="player.name" 
-        class="player-slot"
-      >
+      <div v-for="player in players" :key="player.name" class="player-slot">
         <div class="player-info">
           <span v-if="player.is_host" class="host-icon" title="Администратор">👑</span>
           <div class="player-name">{{ player.name }}</div>
         </div>
       </div>
-      <div 
-        v-for="i in emptySlots" 
-        :key="`empty-${i}`" 
-        class="player-slot empty"
-      >
+      <div v-for="i in emptySlots" :key="`empty-${i}`" class="player-slot empty">
         <div class="player-name">Ожидание игрока...</div>
       </div>
     </div>
@@ -25,7 +17,7 @@
 
 <script setup lang="ts">
 import type { PlayerPublic, Roles } from '@/types/game';
-import { computed, defineProps} from 'vue';
+import { computed } from 'vue';
 
 const props = defineProps<{
   players: PlayerPublic[],
@@ -42,8 +34,8 @@ const emptySlots = computed(() => Math.max(0, totalRoles.value - props.players.l
   background-color: rgba(0, 0, 0, 0.2);
   border-radius: 12px;
   padding: 1.5rem;
-  display: flex; 
-  flex-direction: column; 
+  display: flex;
+  flex-direction: column;
 }
 
 .section-title {

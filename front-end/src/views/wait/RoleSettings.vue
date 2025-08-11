@@ -13,16 +13,18 @@
         </div>
       </div>
     </div>
-    <div v-if="isHost && hasChanges" class="actions">
-      <button class="btn" @click="applyChanges">Применить</button>
-      <button class="btn btn-outline" @click="resetChanges">Сбросить</button>
-    </div>
+    <transition name="fade">
+      <div v-if="isHost && hasChanges" class="actions">
+        <button class="btn" @click="applyChanges">Применить</button>
+        <button class="btn btn-outline" @click="resetChanges">Сбросить</button>
+      </div>
+    </transition>
   </section>
 </template>
 
 <script setup lang="ts">
+import { ref, watch, computed } from 'vue'
 import type { Roles } from '@/types/game';
-import { ref, watch, defineProps, computed, defineEmits } from 'vue'
 
 const props = defineProps<{
   initialRoles: Roles,
@@ -160,10 +162,23 @@ const resetChanges = () => {
   display: flex;
   gap: 1rem;
   margin-top: auto;
+  transition: all 0.2s ease;
 }
 
-.btn-secondary {
-  background-color: var(--input-bg-color);
-  border: 2px solid var(--primary-brand-hover-color);
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.fade-enter-active,
+.fade-leave-active {
+  transition: all 0.3s ease;
+}
+
+@media (max-width: 992px) {
+  .btn {
+    font-size: 0.8rem;
+  }
 }
 </style>
