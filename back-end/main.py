@@ -21,6 +21,7 @@ async def broadcast_room_update(room_id: str):
     except HTTPException:
         print(f"Cannot broadcast update for non-existent room {room_id}")
 
+game_manager.set_connection_manager(connection_manager) 
 game_manager.set_broadcast_callback(broadcast_room_update)
 
 limiter = Limiter(key_func=get_remote_address)
@@ -119,6 +120,13 @@ async def start_game_endpoint(room_id: str, client_id: str = Header(..., alias="
 
     except HTTPException as e:
         raise e
+    
+@app.post("/api/rooms/{room_id}/act", status_code=status.HTTP_200_OK, tags=["Game"])
+async def player_action_endpoint(room_id: str, action: PlayerActionRequest, client_id: str = Header(..., alias="X-Client-ID")):
+    try:
+        await game_manager.process_action(room_id, client_id, action)
+        return {"status": "success", "message": "Action received"}
+    except HTTPException as e: raise e
 
 
 @app.websocket("/ws/{room_id}/{client_id}")

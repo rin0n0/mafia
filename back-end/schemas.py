@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from enum import Enum
+import asyncio
 
 class RoomStatus(str, Enum):
     WAITING = "waiting"
@@ -22,11 +23,16 @@ class PlayerRole(str, Enum):
     COMMISSAR = "comissar"
     WHORE = "whore"
 
+class ActionType(str, Enum):
+    INTRODUCE = "introduce"
+    VOTE = "vote"
+
 class Player(BaseModel):
     client_id: str 
     name: str
     is_alive: bool = True
     role: Optional[PlayerRole] = None
+    description: Optional[str] = None
 
 class Roles (BaseModel):
     mafia: int = 0
@@ -59,10 +65,16 @@ class GameRoom(BaseModel):
     last_events: List[Dict[str, Any]] = Field(default_factory=list)
     winner: Optional[Winner] = None
 
+    phase_event: Optional[asyncio.Event] = Field(default=None, exclude=True)
+    game_loop_task: Optional[asyncio.Task] = Field(default=None, exclude=True)
+    class Config:
+        arbitrary_types_allowed = True
+
 class PlayerPublic(BaseModel):
     name: str
     is_alive: bool = True
     is_host: bool = False 
+    has_acted: bool = False
 
 class GameRoomPublic(BaseModel):
     room_id: str
@@ -86,6 +98,10 @@ class SetRolesRequest(BaseModel):
 
 class SetEnvironRequest(BaseModel):
     environ: str | None
+
+class PlayerActionRequest(BaseModel):
+    action_type: ActionType
+    payload: Dict[str, Any]
 
 class WsMessage(BaseModel):
     type: str

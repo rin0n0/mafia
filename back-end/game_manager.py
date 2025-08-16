@@ -1,21 +1,31 @@
 from fastapi import HTTPException
 import asyncio
-from typing import Dict
 import random
 import string
+from collections import Counter
+from typing import Dict, List, Coroutine, Any
 
-from schemas import GameRoom, Player, GameRoomPersonalizedResponse, GameRoomPublic, PlayerPublic, Roles, RoomStatus, PlayerRole, GamePhase
+from schemas import *
+from connection_manager import ConnectionManager
 
 class GameManager:
     def __init__(self):
         self.active_rooms: Dict[str, GameRoom] = {}
         self.MAX_ROOMS_PER_HOST = 3
+        self._broadcast_callback: Coroutine[str, None, None] | None = None
+        self._connection_manager: ConnectionManager | None = None
+
+    def set_connection_manager(self, manager: ConnectionManager): self._connection_manager = manager
+    def set_broadcast_callback(self, callback): self._broadcast_callback = callback
 
     def _generate_room_id(self) -> str:
         while True:
             room_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
             if room_id not in self.active_rooms:
                 return room_id
+            
+    def _sanitize_for_llm(self, text: str) -> str:
+        return f"{{{{{text}}}}}"
 
     def create_room(self, host_name: str, host_client_id: str) -> GameRoom:
         room_id = self._generate_room_id()
@@ -98,53 +108,144 @@ class GameManager:
         
         room.status = RoomStatus.IN_PROGRESS
         room.phase = GamePhase.INTRODUCTION_NIGHT
-        room.day_number = 1
-        
+        room.day_number = 0
+
+        task = asyncio.create_task(self._game_loop(room))
+        room.game_loop_task = task
         print(f"Game started in room {room_id}. Roles distributed.")
         return room
     
     def set_broadcast_callback(self, callback):
         self._broadcast_callback = callback
-    
-    def schedule_player_removal(self, room_id: str, client_id: str, delay: int = 5):
+
+    async def _game_loop(self, room: GameRoom):
+        try:
+            await self._handle_introduction_night(room)
+            await self._handle_introduction_day(room)
+
+            print(f"Game loop for room {room.room_id} finished (placeholder).")
+        except asyncio.CancelledError:
+            print(f"Game loop for room {room.room_id} was cancelled.")
+        except Exception as e:
+            print(f"Error in game loop for room {room.room_id}: {e}")
+
+    async def _handle_introduction_night(self, room: GameRoom):
+        room.phase = GamePhase.INTRODUCTION_NIGHT
+        room.phase_event = asyncio.Event()
+        await self._broadcast_callback(room.room_id)
+        print(f"Room {room.room_id}: Starting INTRODUCTION_NIGHT. Waiting for descriptions for 60s.")
+        try: await asyncio.wait_for(room.phase_event.wait(), timeout=60.0)
+        except asyncio.TimeoutError: print(f"Room {room.room_id}: Introduction timeout reached.")
+        finally: room.phase_event = None
+
+    async def _handle_introduction_day(self, room: GameRoom):
+        room.phase = GamePhase.INTRODUCTION_DAY
+        room.day_number = 1
+        room.phase_event = asyncio.Event()
+        await self._broadcast_callback(room.room_id)
+
+        joke_vote_message = WsMessage(type="joke_vote_started", payload={"question": "Кто здесь самый крутой житель?"})
+        if self._connection_manager: await self._connection_manager.broadcast(room.room_id, joke_vote_message.model_dump_json())
+        print(f"Room {room.room_id}: Starting INTRODUCTION_DAY. Joke vote started.")
+        try: await asyncio.wait_for(room.phase_event.wait(), timeout=90.0)
+        except asyncio.TimeoutError: print(f"Room {room.room_id}: Joke vote timeout reached.")
+        finally:
+            vote_counts = Counter(room.day_votes.values())
+            winner_id = vote_counts.most_common(1)[0][0] if vote_counts else None
+            winner_player = next((p for p in room.players if p.client_id == winner_id), None)
+            winner_name = winner_player.name if winner_player else "Никто"
+            result_text = f"В шуточном голосовании победил(а) {self._sanitize_for_llm(winner_name)}!"
+            
+            room.last_events.append({"type": "joke_vote_result", "text": result_text})
+            results_message = WsMessage(type="vote_results", payload={"text": result_text})
+            if self._connection_manager: await self._connection_manager.broadcast(room.room_id, results_message.model_dump_json())
+            
+            room.day_votes.clear()
+            room.phase_event = None
+            room.phase = GamePhase.NIGHT
+            await self._broadcast_callback(room.room_id)
+
+    async def process_action(self, room_id: str, client_id: str, action: PlayerActionRequest):
+        room = self.get_room(room_id)
+        player = next((p for p in room.players if p.client_id == client_id), None)
+        if not player or not player.is_alive: raise HTTPException(status_code=403, detail="Действие недоступно")
+        
+        if room.phase == GamePhase.INTRODUCTION_NIGHT and action.action_type == ActionType.INTRODUCE:
+            self._handle_introduce_action(room, player, action.payload)
+        elif room.phase == GamePhase.INTRODUCTION_DAY and action.action_type == ActionType.VOTE:
+            self._handle_vote_action(room, player, action.payload)
+        else: 
+            raise HTTPException(status_code=400, detail="Неверное действие для текущей фазы")
+        
+        await self._broadcast_callback(room_id)
+
+    def _handle_introduce_action(self, room: GameRoom, player: Player, payload: dict):
+        description = payload.get("description")
+        player.description = self._sanitize_for_llm(description) if description else ""
+        print(f"Player {player.name} submitted description.")
+        self._check_phase_completion(room)
+
+    def _handle_vote_action(self, room: GameRoom, player: Player, payload: dict):
+        if player.client_id in room.day_votes: raise HTTPException(status_code=400, detail="Вы уже голосовали")
+        target_name = payload.get("target_name")
+        target_player = next((p for p in room.players if p.name == target_name and p.is_alive), None)
+        if not target_player: raise HTTPException(status_code=404, detail=f"Игрок с именем '{target_name}' не найден")
+
+        room.day_votes[player.client_id] = target_player.client_id
+        print(f"Player {player.name} voted for {target_player.name}")
+        self._check_phase_completion(room)
+
+    def _check_phase_completion(self, room: GameRoom):
+        if room.phase_event and room.phase_event.is_set(): return
+
+        alive_players = [p for p in room.players if p.is_alive]
+        
+        if room.phase == GamePhase.INTRODUCTION_NIGHT:
+            if all(p.description is not None for p in alive_players):
+                if room.phase_event: room.phase_event.set()
+        elif room.phase == GamePhase.INTRODUCTION_DAY:
+            if len(room.day_votes) == len(alive_players):
+                if room.phase_event: room.phase_event.set()
+
+    def schedule_player_removal(self, room_id: str, client_id: str, delay: int = 10):
         asyncio.create_task(self._remove_player_after_delay(room_id, client_id, delay))
 
     async def _remove_player_after_delay(self, room_id: str, client_id: str, delay: int):
-        print(f"Player {client_id} disconnected. Removal for room {room_id} scheduled in {delay}s.")
         await asyncio.sleep(delay)
-
-        from connection_manager import connection_manager
-
+        if not self._connection_manager or self._connection_manager.is_client_connected(room_id, client_id):
+            return
+        
         try:
             room = self.get_room(room_id)
-            
-            if connection_manager.is_client_connected(room_id, client_id):
-                print(f"Player {client_id} reconnected to {room_id}. Removal cancelled.")
-                return
-
-            print(f"Timeout expired. Removing player {client_id} from room {room_id}.")
             room.players = [p for p in room.players if p.client_id != client_id]
             
             if not room.players:
-                del self.active_rooms[room_id]
-                print(f"Room {room_id} is empty and has been deleted.")
-            else:
-                if room.host_id == client_id:
-                    new_host = room.players[0]
-                    room.host_id = new_host.client_id
-                    print(f"Host left. New host for room {room_id} is {new_host.name}.")
-                if hasattr(self, '_broadcast_callback'):
-                    await self._broadcast_callback(room_id)
-        except (HTTPException, KeyError):
-            print(f"Room {room_id} no longer exists. No action needed for player {client_id}.")
-            pass
+                self._delete_room(room_id)
+                return
 
+            if room.host_id == client_id:
+                room.host_id = room.players[0].client_id
+            
+            self._check_phase_completion(room) 
+            await self._broadcast_callback(room_id)
+        except (HTTPException, KeyError): pass
+
+    def _delete_room(self, room_id: str):
+        if room_id in self.active_rooms:
+            room = self.active_rooms[room_id]
+            if room.game_loop_task and not room.game_loop_task.done():
+                room.game_loop_task.cancel()
+            del self.active_rooms[room_id]
+            print(f"Room {room_id} and its tasks have been deleted.")
 
     def set_roles_settings(self, room_id: str, client_id: str, new_roles: Roles) -> GameRoom:
         room = self.get_room(room_id)
         if client_id != room.host_id:
             raise HTTPException(status_code=403, detail="Только хост может менять настройки")
         
+        if room.status != RoomStatus.WAITING: 
+            raise HTTPException(status_code=400, detail="Нельзя менять настройки после начала игры")
+
         total_roles = sum(new_roles.model_dump().values())
         if len(room.players) != total_roles:
             raise HTTPException(status_code=400, detail=f"Количество ролей ({total_roles}) не совпадает с количеством игроков ({len(room.players)})")
@@ -160,6 +261,8 @@ class GameManager:
         room = self.get_room(room_id)
         if client_id != room.host_id:
             raise HTTPException(status_code=403, detail="Только хост может менять настройки")
+        if room.status != RoomStatus.WAITING: 
+            raise HTTPException(status_code=400, detail="Нельзя менять настройки после начала игры")
         room.environ = environ
         print(f"Room {room_id} environ updated: {room.environ}")
         return room
@@ -171,7 +274,12 @@ def create_public_room_view(room: GameRoom) -> GameRoomPublic:
         PlayerPublic(
             name=p.name,
             is_alive=p.is_alive,
-            is_host=(p.client_id == room.host_id)
+            is_host=(p.client_id == room.host_id),
+            has_acted=(
+                (room.phase == GamePhase.INTRODUCTION_NIGHT and p.description is not None) or
+                (room.phase == GamePhase.INTRODUCTION_DAY and p.client_id in room.day_votes)
+
+            )
         ) for p in room.players
     ]
     return GameRoomPublic(
