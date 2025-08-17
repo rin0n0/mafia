@@ -17,7 +17,8 @@
 body {
   -webkit-user-select: none;
   -ms-user-select: none;     
-  user-select: none;       
+  user-select: none;      
+  background-color: #5a1e1e;
 }
 
 p,h1{
