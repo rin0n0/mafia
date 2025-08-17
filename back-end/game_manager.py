@@ -143,26 +143,45 @@ class GameManager:
         room.day_number = 1
         room.phase_event = asyncio.Event()
         await self._broadcast_callback(room.room_id)
+        print(f"Room {room.room_id}: Starting INTRODUCTION_DAY discussion. Timeout: 300s.")
+        
+        try:
+            await asyncio.wait_for(room.phase_event.wait(), timeout=300.0)
+        except asyncio.TimeoutError:
+            print(f"Room {room.room_id}: Discussion timeout reached.")
+        finally:
+            room.phase_event = None
+            room.day_votes.clear() 
 
-        joke_vote_message = WsMessage(type="joke_vote_started", payload={"question": "Кто здесь самый крутой житель?"})
-        if self._connection_manager: await self._connection_manager.broadcast(room.room_id, joke_vote_message.model_dump_json())
-        print(f"Room {room.room_id}: Starting INTRODUCTION_DAY. Joke vote started.")
-        try: await asyncio.wait_for(room.phase_event.wait(), timeout=90.0)
-        except asyncio.TimeoutError: print(f"Room {room.room_id}: Joke vote timeout reached.")
+        room.phase_event = asyncio.Event() 
+        await self._broadcast_callback(room.room_id) 
+
+        joke_vote_message = WsMessage(type="joke_vote_started", payload={"question": "Кто, по-вашему, самый крутой в этом лобби?"})
+        if self._connection_manager:
+            await self._connection_manager.broadcast(room.room_id, joke_vote_message.model_dump_json())
+        print(f"Room {room.room_id}: Joke vote started. Timeout: 90s.")
+
+        try:
+            await asyncio.wait_for(room.phase_event.wait(), timeout=90.0)
+        except asyncio.TimeoutError:
+            print(f"Room {room.room_id}: Joke vote timeout reached.")
         finally:
             vote_counts = Counter(room.day_votes.values())
             winner_id = vote_counts.most_common(1)[0][0] if vote_counts else None
             winner_player = next((p for p in room.players if p.client_id == winner_id), None)
             winner_name = winner_player.name if winner_player else "Никто"
-            result_text = f"В шуточном голосовании победил(а) {self._sanitize_for_llm(winner_name)}!"
+            result_text = f"По итогам шуточного голосования, самым крутым посчитали игрока {(winner_name)}!"
             
             room.last_events.append({"type": "joke_vote_result", "text": result_text})
             results_message = WsMessage(type="vote_results", payload={"text": result_text})
-            if self._connection_manager: await self._connection_manager.broadcast(room.room_id, results_message.model_dump_json())
+            if self._connection_manager:
+                await self._connection_manager.broadcast(room.room_id, results_message.model_dump_json())
             
+            await asyncio.sleep(6) 
+
             room.day_votes.clear()
             room.phase_event = None
-            room.phase = GamePhase.NIGHT
+            room.phase = GamePhase.NIGHT 
             await self._broadcast_callback(room.room_id)
 
     async def process_action(self, room_id: str, client_id: str, action: PlayerActionRequest):
@@ -172,12 +191,20 @@ class GameManager:
         
         if room.phase == GamePhase.INTRODUCTION_NIGHT and action.action_type == ActionType.INTRODUCE:
             self._handle_introduce_action(room, player, action.payload)
+        elif room.phase == GamePhase.INTRODUCTION_DAY and action.action_type == ActionType.READY_FOR_VOTE:
+            self._handle_ready_for_vote_action(room, player)
         elif room.phase == GamePhase.INTRODUCTION_DAY and action.action_type == ActionType.VOTE:
             self._handle_vote_action(room, player, action.payload)
         else: 
             raise HTTPException(status_code=400, detail="Неверное действие для текущей фазы")
         
         await self._broadcast_callback(room_id)
+
+    def _handle_ready_for_vote_action(self, room: GameRoom, player: Player):
+        if player.client_id not in room.day_votes:
+            room.day_votes[player.client_id] = "ready"
+            print(f"Player {player.name} is ready for vote.")
+            self._check_phase_completion(room)
 
     def _handle_introduce_action(self, room: GameRoom, player: Player, payload: dict):
         description = payload.get("description")
@@ -204,8 +231,13 @@ class GameManager:
             if all(p.description is not None for p in alive_players):
                 if room.phase_event: room.phase_event.set()
         elif room.phase == GamePhase.INTRODUCTION_DAY:
-            if len(room.day_votes) == len(alive_players):
-                if room.phase_event: room.phase_event.set()
+            is_discussion_phase = not any(val != "ready" for val in room.day_votes.values())
+            if is_discussion_phase:
+                if len(room.day_votes) == len(alive_players):
+                    if room.phase_event: room.phase_event.set()
+            else:
+                if len(room.day_votes) == len(alive_players):
+                    if room.phase_event: room.phase_event.set()
 
     def schedule_player_removal(self, room_id: str, client_id: str, delay: int = 10):
         asyncio.create_task(self._remove_player_after_delay(room_id, client_id, delay))

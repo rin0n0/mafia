@@ -1,5 +1,7 @@
 <template>
-  <div class="room-view">
+  <div class="room-view" :style="backgroundStyle">
+    <PhaseAnnouncer :show="showAnnouncer" :title="announcerTitle" :subtitle="announcerSubtitle"
+      :is-role="isRoleAnnouncement" @close="showAnnouncer = false" />
     <div v-if="gameStore.room" class="room-content" :class="{ 'in-game': gameStore.room.status === 'in_progress' }">
 
       <div class="header">
@@ -9,17 +11,22 @@
         </router-link>
 
         <div class="room-title-wrapper">
-          <h1 @click="copyRoomId" title="Нажмите, чтобы скопировать ID">
+          <div v-if="gameStore.room.status === 'waiting'">
+            <h1 @click="copyRoomId" title="Нажмите, чтобы скопировать ID">
+              Комната #{{ gameStore.room.room_id }}
+              <svg class="copy-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
+                <path
+                  d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-5zm0 16H8V7h11v14z">
+                </path>
+              </svg>
+            </h1>
+            <transition name="fade-fast">
+              <span v-if="isCopied" class="copy-feedback">Код скопирован!</span>
+            </transition>
+          </div>
+          <h1 v-else>
             Комната #{{ gameStore.room.room_id }}
-            <svg class="copy-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
-              <path
-                d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-5zm0 16H8V7h11v14z">
-              </path>
-            </svg>
           </h1>
-          <transition name="fade-fast">
-            <span v-if="isCopied" class="copy-feedback">Код скопирован!</span>
-          </transition>
         </div>
 
       </div>
@@ -28,7 +35,8 @@
         :roles="gameStore.room.roles" :initial-environment="gameStore.room.environ" :is-host="gameStore.isHost"
         :player-count="gameStore.playerCount" :is-loading="gameStore.isLoading" @update-roles="handleUpdateRoles"
         @update-environment="handleUpdateEnvironment" />
-      <GameLayout v-else-if="gameStore.room.status === 'in_progress'" />
+      <GameLayout v-else-if="gameStore.room.status === 'in_progress'" :selected-player-name="selectedPlayerName"
+        @player-select="handlePlayerSelect" />
 
       <div class="actions">
         <button v-if="gameStore.room.status === 'waiting'" @click="startGame" class="btn start-game-btn"
@@ -36,8 +44,13 @@
           {{ startGameButtonText }}
         </button>
 
-        <button v-if="gameStore.room.status === 'in_progress' && shouldShowVoteButton" class="btn vote-btn">
-          Проголосовать
+        <button v-if="isDiscussionPhase" @click="readyForVote" :disabled="gameStore.myPlayerHasActed" class="btn">
+          {{ gameStore.myPlayerHasActed ? 'Ожидаем других...' : 'Перейти к голосованию' }}
+        </button>
+
+        <button v-if="isVotingPhase" @click="submitVote" :disabled="!selectedPlayerName || gameStore.myPlayerHasActed"
+          class="btn">
+          {{ voteButtonText }}
         </button>
       </div>
 
@@ -54,18 +67,71 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed, ref } from 'vue';
+import { onMounted, onUnmounted, computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useGameStore } from '@/stores/gameStore';
 import type { Roles } from '@/types/game';
 
 import LobbyLayout from './wait/LobbyLayout.vue';
 import GameLayout from './game/GameLayout.vue';
+import PhaseAnnouncer from './game/PhaseAnnouncer.vue';
 
 const gameStore = useGameStore();
 const route = useRoute();
-
+const showAnnouncer = ref(false);
+const announcerTitle = ref('');
+const announcerSubtitle = ref('');
+const isRoleAnnouncement = ref(false);
 const isCopied = ref(false);
+const selectedPlayerName = ref<string | null>(null);
+/* eslint-disable */
+const bgLight = require('@/assets/background_light.png');
+/* eslint-disable */
+const bgDark = require('@/assets/background_dark.png');
+const roleMap: Record<string, string> = {
+  mafia: "Мафия",
+  citizen: "Мирный житель",
+  doctor: "Доктор",
+  comissar: "Комиссар",
+  whore: "Потаскуха"
+};
+
+const phaseMap: Record<string, string> = {
+  introduction_night: "Ночь знакомств",
+  introduction_day: "Первый день",
+  night: "Ночь",
+  day: "День",
+};
+
+const backgroundStyle = computed(() => {
+  const isNight = gameStore.room?.phase?.includes('night');
+  const imageUrl = isNight ? bgDark : bgLight;
+  return {
+    backgroundImage: `url(${imageUrl})`
+  };
+});
+
+watch(() => gameStore.room?.status, (newStatus, oldStatus) => {
+  if (oldStatus === 'waiting' && newStatus === 'in_progress') {
+    announcerTitle.value = 'Ваша роль';
+    const role = gameStore.myRole;
+    announcerSubtitle.value = role ? (roleMap[role] || role) : '';
+    isRoleAnnouncement.value = true;
+    showAnnouncer.value = true;
+  }
+});
+
+watch(() => gameStore.room?.phase, (newPhase) => {
+  if (newPhase && phaseMap[newPhase]) {
+    announcerTitle.value = phaseMap[newPhase];
+    announcerSubtitle.value = '';
+    isRoleAnnouncement.value = false;
+    showAnnouncer.value = true;
+    setTimeout(() => {
+      if (!isRoleAnnouncement.value) showAnnouncer.value = false;
+    }, 3500);
+  }
+});
 
 const copyRoomId = async () => {
   if (!gameStore.room?.room_id || isCopied.value) return;
@@ -78,6 +144,41 @@ const copyRoomId = async () => {
   } catch (err) {
     console.error('Не удалось скопировать ID комнаты:', err);
   }
+};
+
+const handlePlayerSelect = (playerName: string) => {
+  if (selectedPlayerName.value === playerName) {
+    selectedPlayerName.value = null;
+  } else {
+    selectedPlayerName.value = playerName;
+  }
+};
+
+const isResultsPhase = computed(() => !!gameStore.lastVoteResults);
+
+const isDiscussionPhase = computed(() =>
+  gameStore.room?.phase === 'introduction_day' &&
+  !gameStore.currentVoteQuestion &&
+  !isResultsPhase.value
+);
+
+const isVotingPhase = computed(() =>
+  gameStore.room?.phase === 'introduction_day' &&
+  !!gameStore.currentVoteQuestion &&
+  !isResultsPhase.value
+);
+const voteButtonText = computed(() => {
+  if (gameStore.myPlayerHasActed) return 'Ожидаем других...';
+  if (selectedPlayerName.value) return `Голосовать за "${selectedPlayerName.value}"`;
+  return 'Выберите игрока для голосования';
+});
+
+const readyForVote = () => {
+  gameStore.performAction('ready_for_vote', {});
+};
+const submitVote = () => {
+  if (!selectedPlayerName.value) return;
+  gameStore.performAction('vote', { target_name: selectedPlayerName.value });
 };
 
 onMounted(async () => {
@@ -115,10 +216,6 @@ const startGameButtonText = computed(() => {
   return 'Начать игру';
 });
 
-const shouldShowVoteButton = computed(() => {
-  return gameStore.room?.phase === 'day';
-});
-
 const startGame = () => {
   if (gameStore.isHost && canStartGame.value) {
     gameStore.startGame();
@@ -137,6 +234,7 @@ const startGame = () => {
   display: flex;
   justify-content: center;
   align-items: flex-start;
+  transition: background-image 0.8s ease-in-out;
 }
 
 .room-content {

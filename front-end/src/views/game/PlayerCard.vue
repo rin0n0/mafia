@@ -1,5 +1,5 @@
 <template>
-    <div class="player-card" :class="{ 'is-dead': !player.is_alive }">
+    <div class="player-card" :class="{ 'is-dead': !player.is_alive, 'has-acted': player.has_acted }">
         <div class="player-avatar">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
                 <path
@@ -9,6 +9,15 @@
         </div>
         <p class="player-name">{{ player.name }}</p>
         <div v-if="player.is_host" class="host-badge" title="Хост комнаты">👑</div>
+        <div v-if="player.is_alive" class="status-icon">
+            <span v-if="player.has_acted" title="Действие выполнено">✔️</span>
+            <span v-else title="Ожидание...">⏳</span>
+        </div>
+        <div v-if="player.is_alive && !isMyCard" class="emote-wrapper">
+            <button @click.stop="sendEmote" class="emote-btn" title="Анонимно привлечь внимание" :disabled="emoteSent">
+                <span class="emote-icon">👁️</span>
+            </button>
+        </div>
         <div v-if="!player.is_alive" class="dead-overlay">
             <span>ВЫБЫЛ</span>
         </div>
@@ -17,11 +26,26 @@
 
 <script setup lang="ts">
 import type { PropType } from 'vue';
+import { ref } from 'vue';
+import { useUserStore } from '@/stores/userStore';
 import type { PlayerPublic } from '@/types/game';
 
-defineProps({
+const props = defineProps({
     player: { type: Object as PropType<PlayerPublic>, required: true },
+    isSelectable: { type: Boolean, default: false },
+    isSelected: { type: Boolean, default: false },
 });
+
+const emoteSent = ref(false);
+const userStore = useUserStore();
+const isMyCard = props.player.name === userStore.playerName;
+
+const sendEmote = () => {
+    if (emoteSent.value) return;
+    console.log(`(имитация) Отправляем эмоцию игроку ${props.player.name}`);
+    emoteSent.value = true;
+    setTimeout(() => { emoteSent.value = false; }, 5000);
+};
 </script>
 
 <style scoped>
@@ -44,6 +68,18 @@ defineProps({
     /* Убираем все сложные тени */
     box-shadow: none;
 }
+
+.player-card.is-selectable:not(.is-dead):hover {
+    transform: translateY(-5px);
+    border-color: var(--input-focus-border-color);
+}
+
+.player-card.is-selected {
+    border-color: var(--primary-brand-color);
+    box-shadow: 0 0 15px var(--primary-brand-color);
+    transform: scale(1.05);
+}
+
 
 .player-card:not(.is-dead):hover {
     /* Простой и понятный эффект приподнимания */
@@ -103,5 +139,72 @@ defineProps({
     font-size: 1.2rem;
     letter-spacing: 2px;
     backdrop-filter: blur(2px);
+}
+
+.player-card.has-acted {
+    border-color: #4CAF50;
+}
+
+.status-icon {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    font-size: 1.2rem;
+}
+
+.emote-wrapper {
+    position: absolute;
+    bottom: 8px;
+    right: 8px;
+    opacity: 0;
+    /* Скрыто по умолчанию */
+    transition: opacity 0.2s ease-in-out;
+}
+
+.player-card:hover .emote-wrapper {
+    opacity: 1;
+    /* Появляется при наведении на карточку */
+}
+
+.emote-btn {
+    background: rgba(0, 0, 0, 0.4);
+    border: 1px solid var(--input-border-color);
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+}
+
+.emote-btn:hover {
+    background: rgba(0, 0, 0, 0.7);
+    transform: scale(1.1);
+}
+
+.emote-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+    animation: send-anim 0.5s ease;
+}
+
+.emote-icon {
+    font-size: 1.2rem;
+}
+
+@keyframes send-anim {
+    0% {
+        transform: scale(1.2);
+    }
+
+    50% {
+        transform: scale(0.8);
+    }
+
+    100% {
+        transform: scale(1);
+    }
 }
 </style>

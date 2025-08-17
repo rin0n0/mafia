@@ -1,13 +1,14 @@
 <template>
     <div class="host-display">
-        <p>{{ message }}</p>
+        <p>{{ displayedText }}<span class="cursor"></span></p>
     </div>
 </template>
 
 <script setup lang="ts">
-defineProps({
-    message: { type: String, required: true },
-});
+import { useTypewriter } from '@/composables/useTypewriter';
+
+const props = defineProps({ message: { type: String, required: true } });
+const { displayedText, isTyping } = useTypewriter(() => props.message);
 </script>
 
 <style scoped>
@@ -32,6 +33,27 @@ defineProps({
     line-height: 1.6;
     color: var(--primary-text-color);
     text-shadow: none;
+}
+
+.cursor.is-typing {
+    display: inline-block;
+    background-color: var(--primary-text-color);
+    margin-left: 8px;
+    width: 4px;
+    height: 1.2em;
+    animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+
+    from,
+    to {
+        background-color: transparent;
+    }
+
+    50% {
+        background-color: var(--primary-text-color);
+    }
 }
 
 @media (min-width: 768px) {

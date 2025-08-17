@@ -7,6 +7,9 @@ import type {
   GameRoomPublic,
   GameRoomPersonalizedResponse,
   Roles,
+  WsMessage,
+  JokeVotePayload,
+  VoteResultsPayload,
 } from "@/types/game";
 
 function updatePersonalState(
@@ -32,6 +35,8 @@ interface GameState {
   isConnected: boolean;
   isLoading: boolean;
   error: string | null;
+  currentVoteQuestion: string | null;
+  lastVoteResults: string | null;
 }
 
 export const useGameStore = defineStore("game", {
@@ -43,6 +48,8 @@ export const useGameStore = defineStore("game", {
     isConnected: false,
     isLoading: false,
     error: null,
+    currentVoteQuestion: null,
+    lastVoteResults: null,
   }),
 
   getters: {
@@ -51,6 +58,15 @@ export const useGameStore = defineStore("game", {
         return 0;
       }
       return state.room?.players.length;
+    },
+
+    myPlayerHasActed(state): boolean {
+      const userStore = useUserStore();
+      if (!state.room || !userStore.clientId) return false;
+      const me = state.room.players.find(
+        (p) => p.name === userStore.playerName
+      );
+      return me?.has_acted ?? false;
     },
   },
 
@@ -215,6 +231,25 @@ export const useGameStore = defineStore("game", {
       }
     },
 
+    async performAction(action_type: string, payload: object) {
+      const userStore = useUserStore();
+      if (!this.room || !userStore.clientId) return;
+
+      this.isLoading = true;
+      try {
+        await axios.post(
+          `${API_BASE}/rooms/${this.room.room_id}/act`,
+          { action_type, payload },
+          { headers: { "X-Client-ID": userStore.clientId } }
+        );
+      } catch (err: any) {
+        this.error = err.response?.data?.detail || "Ошибка действия";
+        alert(this.error);
+      } finally {
+        this.isLoading = false;
+      }
+    },
+
     connectWebSocket() {
       const userStore = useUserStore();
       if (!this.room || !userStore.clientId) {
@@ -244,20 +279,37 @@ export const useGameStore = defineStore("game", {
 
         switch (message.type) {
           case "personal_state_update": {
-            const personalPayload: GameRoomPersonalizedResponse =
-              message.payload;
-            updatePersonalState(this, personalPayload);
-            console.log(
-              "Personal state updated via WebSocket:",
-              personalPayload
+            updatePersonalState(
+              this,
+              message.payload as GameRoomPersonalizedResponse
             );
             break;
           }
-
           case "public_state_update": {
-            const publicPayload: GameRoomPublic = message.payload;
-            this.room = publicPayload;
-            console.log("Public state updated via WebSocket:", publicPayload);
+            const oldPhase = this.room?.phase;
+
+            const newRoomState = message.payload as GameRoomPublic;
+            this.room = newRoomState;
+
+            if (oldPhase !== newRoomState.phase) {
+              console.log(
+                `Phase changed from ${oldPhase} to ${newRoomState.phase}. Clearing context.`
+              );
+              this.currentVoteQuestion = null;
+              this.lastVoteResults = null;
+            }
+            break;
+          }
+          case "joke_vote_started": {
+            const payload = message.payload as JokeVotePayload;
+            this.currentVoteQuestion = payload.question;
+            this.lastVoteResults = null;
+            break;
+          }
+          case "vote_results": {
+            const payload = message.payload as VoteResultsPayload;
+            this.lastVoteResults = payload.text;
+            this.currentVoteQuestion = null;
             break;
           }
         }

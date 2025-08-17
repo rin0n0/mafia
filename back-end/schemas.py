@@ -26,6 +26,7 @@ class PlayerRole(str, Enum):
 class ActionType(str, Enum):
     INTRODUCE = "introduce"
     VOTE = "vote"
+    READY_FOR_VOTE = "ready_for_vote"
 
 class Player(BaseModel):
     client_id: str 
