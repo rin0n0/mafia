@@ -4,6 +4,16 @@
         <p class="form-subtitle">
             Это описание увидит ведущий. Оно поможет сделать игру атмосфернее.
         </p>
+
+        <div class="theme-info">
+            <p v-if="gameStore.room?.environ">
+                Тема игры: <br /><strong>"{{ gameStore.room.environ }}"</strong>
+            </p>
+            <p v-else>
+                Тема игры не задана. Можете придумать любую историю.
+            </p>
+        </div>
+
         <textarea v-model="description" class="form-input" rows="4" maxlength="300"
             placeholder="Например: 'Я старый алкаш, который видел в этом городе всё...'"></textarea>
         <div class="char-counter">{{ description.length }} / 300</div>
@@ -16,6 +26,9 @@
 
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useGameStore } from '@/stores/gameStore';
+
+const gameStore = useGameStore();
 
 const description = ref('');
 
@@ -54,6 +67,28 @@ const submit = () => {
     text-align: center;
     font-size: 1rem;
     margin: 0 0 1.5rem 0;
+}
+
+/* Стили для нового блока */
+.theme-info {
+    text-align: center;
+    color: var(--secondary-text-color);
+    font-size: 0.9rem;
+    margin-bottom: 1.5rem;
+    padding: 0.75rem;
+    background-color: rgba(0, 0, 0, 0.15);
+    border-radius: 8px;
+    border: 1px solid var(--input-border-color);
+}
+
+.theme-info p {
+    margin: 0;
+    color: var(--secondary-text-color);
+}
+
+.theme-info strong {
+    color: var(--primary-text-color);
+    font-weight: 600;
 }
 
 .form-input {

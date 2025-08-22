@@ -1,7 +1,7 @@
 <template>
   <div class="room-view" :style="backgroundStyle">
     <PhaseAnnouncer :show="showAnnouncer" :title="announcerTitle" :subtitle="announcerSubtitle"
-      :is-role="isRoleAnnouncement" @close="showAnnouncer = false" />
+      :is-role="isRoleAnnouncement" @close="handleAnnouncerClose" />
     <ErrorDisplay :message="gameStore.error" @close="gameStore.clearError()" />
     <NotificationDisplay />
     <div v-if="gameStore.room" class="room-content" :class="{ 'in-game': gameStore.room.status === 'in_progress' }">
@@ -114,27 +114,56 @@ const backgroundStyle = computed(() => {
   };
 });
 
-watch(() => gameStore.room?.status, (newStatus, oldStatus) => {
-  if (oldStatus === 'waiting' && newStatus === 'in_progress') {
-    announcerTitle.value = 'Ваша роль';
-    const role = gameStore.myRole;
-    announcerSubtitle.value = role ? (roleMap[role] || role) : '';
-    isRoleAnnouncement.value = true;
-    showAnnouncer.value = true;
-  }
-});
 
-watch(() => gameStore.room?.phase, (newPhase) => {
-  if (newPhase && phaseMap[newPhase]) {
-    announcerTitle.value = phaseMap[newPhase];
-    announcerSubtitle.value = '';
-    isRoleAnnouncement.value = false;
-    showAnnouncer.value = true;
-    setTimeout(() => {
-      if (!isRoleAnnouncement.value) showAnnouncer.value = false;
-    }, 3500);
+watch(
+  [() => gameStore.room?.status, () => gameStore.room?.phase],
+  ([newStatus, newPhase], [oldStatus, oldPhase]) => {
+
+    if (oldStatus === 'waiting' && newStatus === 'in_progress') {
+      announcerTitle.value = 'Ваша роль';
+      announcerSubtitle.value = roleMap[gameStore.myRole || ''] || "pisyapopa";
+      isRoleAnnouncement.value = true;
+      showAnnouncer.value = true;
+      return;
+    }
+    if (newPhase && newPhase !== oldPhase) {
+      if (isRoleAnnouncement.value && showAnnouncer.value) {
+        return;
+      }
+
+      announcerTitle.value = phaseMap[newPhase] || 'Новая фаза';
+      announcerSubtitle.value = '';
+      isRoleAnnouncement.value = false;
+      showAnnouncer.value = true;
+
+      setTimeout(() => {
+        showAnnouncer.value = false;
+      }, 3500);
+    }
   }
-});
+);
+
+const handleAnnouncerClose = () => {
+  const wasRoleAnnouncement = isRoleAnnouncement.value;
+  showAnnouncer.value = false;
+
+  if (wasRoleAnnouncement) {
+    const currentPhase = gameStore.room?.phase;
+    if (currentPhase && phaseMap[currentPhase]) {
+      setTimeout(() => {
+        announcerTitle.value = phaseMap[currentPhase];
+        announcerSubtitle.value = '';
+        isRoleAnnouncement.value = false;
+        showAnnouncer.value = true;
+
+        setTimeout(() => {
+          showAnnouncer.value = false;
+        }, 3500);
+      }, 500);
+    }
+  }
+};
+
 
 const copyRoomId = async () => {
   if (!gameStore.room?.room_id || isCopied.value) return;
