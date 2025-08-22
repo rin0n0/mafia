@@ -2,6 +2,8 @@
   <div class="room-view" :style="backgroundStyle">
     <PhaseAnnouncer :show="showAnnouncer" :title="announcerTitle" :subtitle="announcerSubtitle"
       :is-role="isRoleAnnouncement" @close="showAnnouncer = false" />
+    <ErrorDisplay :message="gameStore.error" @close="gameStore.clearError()" />
+    <NotificationDisplay />
     <div v-if="gameStore.room" class="room-content" :class="{ 'in-game': gameStore.room.status === 'in_progress' }">
 
       <div class="header">
@@ -71,10 +73,11 @@ import { onMounted, onUnmounted, computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { useGameStore } from '@/stores/gameStore';
 import type { Roles } from '@/types/game';
-
+import NotificationDisplay from '@/views/ui/NotificationDisplay.vue';
 import LobbyLayout from './wait/LobbyLayout.vue';
 import GameLayout from './game/GameLayout.vue';
 import PhaseAnnouncer from './game/PhaseAnnouncer.vue';
+import ErrorDisplay from './ui/ErrorDisplay.vue';
 
 const gameStore = useGameStore();
 const route = useRoute();

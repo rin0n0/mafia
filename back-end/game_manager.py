@@ -167,21 +167,34 @@ class GameManager:
             print(f"Room {room.room_id}: Joke vote timeout reached.")
         finally:
             vote_counts = Counter(room.day_votes.values())
-            winner_id = vote_counts.most_common(1)[0][0] if vote_counts else None
-            winner_player = next((p for p in room.players if p.client_id == winner_id), None)
-            winner_name = winner_player.name if winner_player else "Никто"
-            result_text = f"По итогам шуточного голосования, самым крутым посчитали игрока {(winner_name)}!"
-            
-            room.last_events.append({"type": "joke_vote_result", "text": result_text})
+            esult_text = ""
+            if not vote_counts:
+                result_text = "Голосование завершилось, но никто не отдал свой голос."
+            else:
+                top_two = vote_counts.most_common(2)
+                
+                is_tie = len(top_two) > 1 and top_two[0][1] == top_two[1][1]
+
+                if is_tie:
+                    tied_vote_count = top_two[0][1]
+                    tied_player_ids = [pid for pid, count in vote_counts.items() if count == tied_vote_count]
+                    tied_player_names = [p.name for p in room.players if p.client_id in tied_player_ids]             
+                    result_text = f"Игроки {', '.join(tied_player_names)} набрали одинаковое количество голосов. Голосование оказалось безрезультатным."
+                else:
+                    winner_id = top_two[0][0]
+                    winner_player = next((p for p in room.players if p.client_id == winner_id), None)
+                    winner_name = winner_player.name if winner_player else "Неизвестный"             
+                    result_text = f"По итогам шуточного голосования, самым подозрительным посчитали игрока {winner_name}!"
+                    room.last_events.append({"type": "joke_vote_result", "text": result_text})
             results_message = WsMessage(type="vote_results", payload={"text": result_text})
             if self._connection_manager:
                 await self._connection_manager.broadcast(room.room_id, results_message.model_dump_json())
             
-            await asyncio.sleep(6) 
+            await asyncio.sleep(10)
 
             room.day_votes.clear()
             room.phase_event = None
-            room.phase = GamePhase.NIGHT 
+            room.phase = GamePhase.NIGHT
             await self._broadcast_callback(room.room_id)
 
     async def process_action(self, room_id: str, client_id: str, action: PlayerActionRequest):
@@ -298,8 +311,40 @@ class GameManager:
         room.environ = environ
         print(f"Room {room_id} environ updated: {room.environ}")
         return room
+    
+    async def process_websocket_message(self, room_id: str, client_id: str, data: Dict):
+        message_type = data.get("type")
+        payload = data.get("payload", {})
 
+        if message_type == "send_emote":
+            await self._handle_send_emote(room_id, client_id, payload)
+        else:
+            print(f"Unknown WebSocket message type received from {client_id}: {message_type}")
 
+    async def _handle_send_emote(self, room_id: str, sender_client_id: str, payload: Dict):
+        try:
+            room = self.get_room(room_id)
+            target_name = payload.get("target_name")
+
+            sender_player = next((p for p in room.players if p.client_id == sender_client_id), None)
+            target_player = next((p for p in room.players if p.name == target_name and p.is_alive), None)
+
+            if not sender_player or not target_player or sender_player == target_player:
+                return
+
+            print(f"Player {sender_player.name} sent emote to {target_player.name}")
+
+            emote_message = WsMessage(
+                type="receive_emote",
+                payload={"from_player": sender_player.name}
+            )
+
+            if self._connection_manager:
+                await self._connection_manager.send_personal_message(
+                    room_id, target_player.client_id, emote_message.model_dump_json()
+                )
+        except HTTPException:
+            pass # Если комната не найдена, просто ничего не делаем
 
 def create_public_room_view(room: GameRoom) -> GameRoomPublic:
     public_players = [

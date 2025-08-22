@@ -1,7 +1,5 @@
-<!-- src/views/game/GameLayout.vue -->
 <template>
     <div class="game-layout">
-        <!-- Таймер для фазы обсуждения -->
         <div v-if="isDiscussionPhase" class="timer-bar">
             <span>Обсуждение: {{ formattedTimeLeft }}</span>
             <div class="timer-bar-inner" :style="{ width: timerProgress + '%' }"></div>
@@ -27,26 +25,22 @@
 import { ref, onUnmounted, computed, watch } from 'vue';
 import { useGameStore } from '@/stores/gameStore';
 
-// Импорты компонентов
 import HostDisplay from './HostDisplay.vue';
 import PlayerGrid from './PlayerGrid.vue';
 import PlayerCard from './PlayerCard.vue';
 import MyRolePanel from './MyRolePanel.vue';
 import IntroductionForm from './IntroductionForm.vue';
 
-// --- Пропсы и События ---
 defineProps<{
     selectedPlayerName: string | null;
 }>();
 defineEmits(['playerSelect']);
 
-// --- Инициализация ---
 const gameStore = useGameStore();
 const DISCUSSION_TIME = 300; // 5 минут
 const timeLeft = ref(DISCUSSION_TIME);
 let timerInterval: number | null = null;
 
-// --- Computed-свойства для управления состоянием UI ---
 const isResultsPhase = computed(() => !!gameStore.lastVoteResults);
 
 const isDiscussionPhase = computed(() =>
@@ -94,7 +88,6 @@ const startTimer = () => {
 const stopTimer = () => {
     if (timerInterval) clearInterval(timerInterval);
 };
-
 
 watch(isDiscussionPhase, (isDiscussion) => {
     if (isDiscussion) {

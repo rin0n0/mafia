@@ -30,7 +30,7 @@
         <button class="btn" @click="joinGame" :disabled="joinRoomId.length < 4">
           Присоединиться
         </button>
-        <p v-if="gameStore.error" class="error-message">{{ gameStore.error }}</p>
+        <ErrorDisplay :message="gameStore.error" @close="gameStore.clearError()" />
       </div>
 
     </div>
@@ -43,7 +43,7 @@ import { useUserStore } from '@/stores/userStore';
 import { useGameStore } from '@/stores/gameStore';
 import { useRoute } from 'vue-router';
 const route = useRoute();
-
+import ErrorDisplay from './ui/ErrorDisplay.vue';
 const userStore = useUserStore();
 const gameStore = useGameStore();
 

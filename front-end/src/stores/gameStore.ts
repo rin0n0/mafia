@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import axios from "axios";
 import { useUserStore } from "./userStore";
 import router from "@/router";
+import { useUiStore } from "./uiStore";
 
 import type {
   GameRoomPublic,
@@ -10,6 +11,7 @@ import type {
   WsMessage,
   JokeVotePayload,
   VoteResultsPayload,
+  EmotePayload,
 } from "@/types/game";
 
 function updatePersonalState(
@@ -71,6 +73,9 @@ export const useGameStore = defineStore("game", {
   },
 
   actions: {
+    clearError() {
+      this.error = null;
+    },
     async createRoom() {
       const userStore = useUserStore();
       if (!userStore.playerName || !userStore.clientId) {
@@ -123,7 +128,6 @@ export const useGameStore = defineStore("game", {
       } catch (err: any) {
         this.error = err.response?.data?.detail || "Ошибка при входе в комнату";
         console.error(this.error);
-        alert(this.error);
       } finally {
         this.isLoading = false;
       }
@@ -178,7 +182,6 @@ export const useGameStore = defineStore("game", {
       } catch (err: any) {
         this.error = err.response?.data?.detail || "Ошибка при смене ролей";
         console.error(this.error);
-        alert(this.error);
       } finally {
         this.isLoading = false;
       }
@@ -200,7 +203,6 @@ export const useGameStore = defineStore("game", {
       } catch (err: any) {
         this.error = err.response?.data?.detail || "Ошибка при смене сеттинга";
         console.error(this.error);
-        alert(this.error);
       } finally {
         this.isLoading = false;
       }
@@ -225,7 +227,6 @@ export const useGameStore = defineStore("game", {
       } catch (err: any) {
         this.error = err.response?.data?.detail || "Ошибка при старте игры";
         console.error(this.error);
-        alert(this.error);
       } finally {
         this.isLoading = false;
       }
@@ -244,14 +245,26 @@ export const useGameStore = defineStore("game", {
         );
       } catch (err: any) {
         this.error = err.response?.data?.detail || "Ошибка действия";
-        alert(this.error);
       } finally {
         this.isLoading = false;
       }
     },
 
+    sendEmote(targetName: string) {
+      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+        const message = {
+          type: "send_emote",
+          payload: { target_name: targetName },
+        };
+        this.socket.send(JSON.stringify(message));
+      } else {
+        console.error("WebSocket is not connected. Cannot send emote.");
+      }
+    },
+
     connectWebSocket() {
       const userStore = useUserStore();
+      const uiStore = useUiStore();
       if (!this.room || !userStore.clientId) {
         console.error(
           "Невозможно подключиться к WS: нет данных о комнате или пользователе."
@@ -265,7 +278,6 @@ export const useGameStore = defineStore("game", {
       }
 
       this.disconnectWebSocket();
-
       const wsUrl = `${WS_BASE}/${this.room.room_id}/${userStore.clientId}`;
       this.socket = new WebSocket(wsUrl);
 
@@ -275,20 +287,27 @@ export const useGameStore = defineStore("game", {
       };
 
       this.socket.onmessage = (event) => {
-        const message = JSON.parse(event.data);
-
-        switch (message.type) {
+        let data = JSON.parse(event.data);
+        if (typeof data === "string") {
+          try {
+            data = JSON.parse(data);
+          } catch (e) {
+            console.error("Failed to double-parse WebSocket message:", e);
+            return;
+          }
+        }
+        switch (data.type) {
           case "personal_state_update": {
             updatePersonalState(
               this,
-              message.payload as GameRoomPersonalizedResponse
+              data.payload as GameRoomPersonalizedResponse
             );
             break;
           }
           case "public_state_update": {
             const oldPhase = this.room?.phase;
 
-            const newRoomState = message.payload as GameRoomPublic;
+            const newRoomState = data.payload as GameRoomPublic;
             this.room = newRoomState;
 
             if (oldPhase !== newRoomState.phase) {
@@ -300,14 +319,21 @@ export const useGameStore = defineStore("game", {
             }
             break;
           }
+          case "receive_emote": {
+            const payload = data.payload as EmotePayload;
+            uiStore.addNotification(
+              `Игрок ${payload.from_player} таинственно вам подмигивает...`
+            );
+            break;
+          }
           case "joke_vote_started": {
-            const payload = message.payload as JokeVotePayload;
+            const payload = data.payload as JokeVotePayload;
             this.currentVoteQuestion = payload.question;
             this.lastVoteResults = null;
             break;
           }
           case "vote_results": {
-            const payload = message.payload as VoteResultsPayload;
+            const payload = data.payload as VoteResultsPayload;
             this.lastVoteResults = payload.text;
             this.currentVoteQuestion = null;
             break;

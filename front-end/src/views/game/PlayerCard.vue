@@ -29,6 +29,8 @@ import type { PropType } from 'vue';
 import { ref } from 'vue';
 import { useUserStore } from '@/stores/userStore';
 import type { PlayerPublic } from '@/types/game';
+import { useGameStore } from '@/stores/gameStore';
+const gameStore = useGameStore();
 
 const props = defineProps({
     player: { type: Object as PropType<PlayerPublic>, required: true },
@@ -43,6 +45,7 @@ const isMyCard = props.player.name === userStore.playerName;
 const sendEmote = () => {
     if (emoteSent.value) return;
     console.log(`(имитация) Отправляем эмоцию игроку ${props.player.name}`);
+    gameStore.sendEmote(props.player.name);
     emoteSent.value = true;
     setTimeout(() => { emoteSent.value = false; }, 5000);
 };

@@ -15,6 +15,10 @@ export interface GameRoomPublic {
   environ: string | null;
 }
 
+export interface EmotePayload {
+  from_player: string;
+}
+
 export interface GameRoomPersonalizedResponse {
   room_details: GameRoomPublic;
   is_current_user_host: boolean;
@@ -42,10 +46,12 @@ export interface WsMessage {
     | "public_state_update"
     | "personal_state_update"
     | "joke_vote_started"
-    | "vote_results";
+    | "vote_results"
+    | "receive_emote";
   payload:
     | GameRoomPublic
     | GameRoomPersonalizedResponse
     | JokeVotePayload
-    | VoteResultsPayload;
+    | VoteResultsPayload
+    | EmotePayload;
 }

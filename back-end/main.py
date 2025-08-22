@@ -20,6 +20,19 @@ async def broadcast_room_update(room_id: str):
         await connection_manager.broadcast(room_id, public_message.model_dump_json())
     except HTTPException:
         print(f"Cannot broadcast update for non-existent room {room_id}")
+    
+async def websocket_receiver(websocket: WebSocket, room_id: str, client_id: str):
+    async for data in websocket.iter_text():
+        try:
+            message_data = json.loads(data)
+            await game_manager.process_websocket_message(room_id, client_id, message_data)
+        except (json.JSONDecodeError, KeyError):
+            print(f"Received invalid WebSocket message from {client_id}")
+
+async def websocket_sender(websocket: WebSocket, queue: asyncio.Queue):
+    while True:
+        message = await queue.get()
+        await websocket.send_text(message)
 
 game_manager.set_connection_manager(connection_manager) 
 game_manager.set_broadcast_callback(broadcast_room_update)
@@ -140,11 +153,18 @@ async def websocket_endpoint(websocket: WebSocket, room_id: str, client_id: str)
         await websocket.close(code=4004, reason="Room not found")
         return
         
-    await connection_manager.connect(websocket, room_id, client_id)
+    queue = await connection_manager.connect(websocket, room_id, client_id)
     
+    receiver_task = asyncio.create_task(websocket_receiver(websocket, room_id, client_id))
+    sender_task = asyncio.create_task(websocket_sender(websocket, queue))
+
     try:
-        while True:
-            await websocket.receive_text()
-    except WebSocketDisconnect:
+        done, pending = await asyncio.wait(
+            [receiver_task, sender_task], return_when=asyncio.FIRST_COMPLETED
+        )
+        for task in pending:
+            task.cancel()
+    finally:
+        print(f"Cleaning up connection for {client_id} in room {room_id}")
         connection_manager.disconnect(room_id, client_id)
         game_manager.schedule_player_removal(room_id, client_id)
