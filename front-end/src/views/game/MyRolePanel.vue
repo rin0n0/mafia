@@ -28,10 +28,7 @@ const formattedRole = computed(() => {
 
 <style scoped>
 .my-role-panel {
-    position: fixed;
-    bottom: 15px;
     left: 50%;
-    transform: translateX(-50%);
     background-color: var(--primary-brand-color);
     color: white;
     padding: 14px 30px;
@@ -55,5 +52,23 @@ const formattedRole = computed(() => {
     letter-spacing: 1.5px;
     display: block;
     line-height: 1.1;
+}
+
+@media (min-width: 992px) {
+    .my-role-panel {
+        position: fixed;
+        bottom: 15px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: var(--primary-brand-color);
+        color: white;
+        padding: 14px 30px;
+        border-radius: 10px;
+        font-size: 1rem;
+        z-index: 100;
+        text-align: center;
+        box-shadow: inset 0 -4px 0 var(--shadow-color), 0 5px 15px rgba(0, 0, 0, 0.3);
+        border: none;
+    }
 }
 </style>

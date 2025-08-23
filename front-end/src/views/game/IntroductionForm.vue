@@ -6,7 +6,7 @@
         </p>
 
         <div class="theme-info">
-            <p v-if="gameStore.room?.environ">
+            <p v-if="gameStore.room?.environ" wrap="soft">
                 Тема игры: <br /><strong>"{{ gameStore.room.environ }}"</strong>
             </p>
             <p v-else>
@@ -49,7 +49,6 @@ const submit = () => {
     border-radius: 10px;
     padding: 1.5rem 2rem;
     width: 100%;
-    max-width: 600px;
     margin: 0 auto;
     animation: fade-in 0.5s ease-out;
 }
@@ -69,9 +68,9 @@ const submit = () => {
     margin: 0 0 1.5rem 0;
 }
 
-/* Стили для нового блока */
 .theme-info {
     text-align: center;
+    width: 100%;
     color: var(--secondary-text-color);
     font-size: 0.9rem;
     margin-bottom: 1.5rem;
@@ -84,6 +83,7 @@ const submit = () => {
 .theme-info p {
     margin: 0;
     color: var(--secondary-text-color);
+    word-break: break-all;
 }
 
 .theme-info strong {

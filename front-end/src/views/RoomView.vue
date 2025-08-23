@@ -1,5 +1,5 @@
 <template>
-  <div class="room-view" :style="backgroundStyle">
+  <div class="room-view" :class="{ 'is-night': isNight }">
     <PhaseAnnouncer :show="showAnnouncer" :title="announcerTitle" :subtitle="announcerSubtitle"
       :is-role="isRoleAnnouncement" @close="handleAnnouncerClose" />
     <ErrorDisplay :message="gameStore.error" @close="gameStore.clearError()" />
@@ -12,8 +12,8 @@
           <span class="back-btn-text">Назад в лобби</span>
         </router-link>
 
-        <div class="room-title-wrapper">
-          <div v-if="gameStore.room.status === 'waiting'">
+        <div v-if="gameStore.room.status === 'waiting'" class="room-title-wrapper">
+          <div>
             <h1 @click="copyRoomId" title="Нажмите, чтобы скопировать ID">
               Комната #{{ gameStore.room.room_id }}
               <svg class="copy-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
@@ -26,9 +26,9 @@
               <span v-if="isCopied" class="copy-feedback">Код скопирован!</span>
             </transition>
           </div>
-          <h1 v-else>
-            Комната #{{ gameStore.room.room_id }}
-          </h1>
+        </div>
+        <div class="room-title-wrapper-game" v-if="gameStore.room.status === 'in_progress'">
+          <h1>Комната #{{ gameStore.room.room_id }}</h1>
         </div>
 
       </div>
@@ -87,10 +87,10 @@ const announcerSubtitle = ref('');
 const isRoleAnnouncement = ref(false);
 const isCopied = ref(false);
 const selectedPlayerName = ref<string | null>(null);
-/* eslint-disable */
-const bgLight = require('@/assets/background_light.png');
-/* eslint-disable */
-const bgDark = require('@/assets/background_dark.png');
+
+
+const isNight = computed(() => gameStore.room?.phase?.includes('night'));
+
 const roleMap: Record<string, string> = {
   mafia: "Мафия",
   citizen: "Мирный житель",
@@ -105,15 +105,6 @@ const phaseMap: Record<string, string> = {
   night: "Ночь",
   day: "День",
 };
-
-const backgroundStyle = computed(() => {
-  const isNight = gameStore.room?.phase?.includes('night');
-  const imageUrl = isNight ? bgDark : bgLight;
-  return {
-    backgroundImage: `url(${imageUrl})`
-  };
-});
-
 
 watch(
   [() => gameStore.room?.status, () => gameStore.room?.phase],
@@ -257,17 +248,49 @@ const startGame = () => {
 
 <style scoped>
 .room-view {
-  background-image: url('@/assets/background_light.png');
-  background-size: cover;
-  background-position: center center;
-  background-attachment: fixed;
   min-height: 100vh;
   padding: 20px;
   display: flex;
   justify-content: center;
   align-items: flex-start;
-  transition: background-image 0.8s ease-in-out;
+  position: relative;
+  z-index: 1;
 }
+
+.room-view::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -1;
+  background-image: url('@/assets/background_light.png');
+  background-size: cover;
+  background-position: center center;
+  transition: opacity 0.8s ease-in-out;
+  opacity: 1;
+}
+
+.room-view::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: -2;
+  background-image: url('@/assets/background_dark.png');
+  background-position: center center;
+  background-size: cover;
+  transition: opacity 0.8s ease-in-out;
+  opacity: 0;
+}
+
+.room-view.is-night::after {
+  opacity: 1;
+}
+
 
 .room-content {
   width: 100%;
@@ -343,11 +366,16 @@ const startGame = () => {
   padding-top: 40vh;
 }
 
-.room-title-wrapper {
+.room-title-wrapper,
+.room-title-wrapper-game {
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+.room-title-wrapper-game {
+  display: none;
 }
 
 .copy-icon {
@@ -389,10 +417,15 @@ const startGame = () => {
 @media (min-width: 992px) {
   .room-view {
     align-items: center;
+    padding-bottom: 60px;
   }
 
   .room-content {
     max-width: 1100px;
+  }
+
+  .room-title-wrapper-game {
+    display: flex;
   }
 
   .room-content.in-game {

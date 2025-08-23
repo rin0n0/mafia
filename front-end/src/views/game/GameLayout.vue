@@ -1,5 +1,6 @@
 <template>
     <div class="game-layout">
+        <MyRolePanel :role="gameStore.myRole" />
         <div v-if="isDiscussionPhase" class="timer-bar">
             <span>Обсуждение: {{ formattedTimeLeft }}</span>
             <div class="timer-bar-inner" :style="{ width: timerProgress + '%' }"></div>
@@ -16,8 +17,6 @@
                 :is-selected="player.name === selectedPlayerName"
                 @click="isVotingPhase && player.is_alive && !gameStore.myPlayerHasActed && $emit('playerSelect', player.name)" />
         </PlayerGrid>
-
-        <MyRolePanel :role="gameStore.myRole" />
     </div>
 </template>
 

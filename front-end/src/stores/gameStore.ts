@@ -26,8 +26,8 @@ function updatePersonalState(
   store.error = null;
 }
 
-const API_BASE = "http://127.0.0.1:8000/api";
-const WS_BASE = "ws://127.0.0.1:8000/ws";
+const API_BASE = "http://192.168.1.108:8000/api";
+const WS_BASE = "ws://192.168.1.108:8000/ws";
 
 interface GameState {
   room: GameRoomPublic | null;
