@@ -221,6 +221,11 @@ class GameManager:
 
     def _handle_introduce_action(self, room: GameRoom, player: Player, payload: dict):
         description = payload.get("description")
+        if len(description) > 300:
+            raise HTTPException(
+                status_code=400,  
+                detail=f"Длина описания не может превышать 300 символов (текущая: {len(description)})"
+            )
         player.description = self._sanitize_for_llm(description) if description else ""
         print(f"Player {player.name} submitted description.")
         self._check_phase_completion(room)
@@ -308,6 +313,11 @@ class GameManager:
             raise HTTPException(status_code=403, detail="Только хост может менять настройки")
         if room.status != RoomStatus.WAITING: 
             raise HTTPException(status_code=400, detail="Нельзя менять настройки после начала игры")
+        if len(environ) > 300:
+            raise HTTPException(
+                status_code=400,  
+                detail=f"Длина описания не может превышать 300 символов (текущая: {len(environ)})"
+            )
         room.environ = environ
         print(f"Room {room_id} environ updated: {room.environ}")
         return room

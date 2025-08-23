@@ -1,7 +1,7 @@
 <template>
   <div class="room-view" :class="{ 'is-night': isNight }">
     <PhaseAnnouncer :show="showAnnouncer" :title="announcerTitle" :subtitle="announcerSubtitle"
-      :is-role="isRoleAnnouncement" @close="handleAnnouncerClose" />
+      :is-role="isRoleAnnouncement" :role="gameStore.myRole || undefined" @close="handleAnnouncerClose" />
     <ErrorDisplay :message="gameStore.error" @close="gameStore.clearError()" />
     <NotificationDisplay />
     <div v-if="gameStore.room" class="room-content" :class="{ 'in-game': gameStore.room.status === 'in_progress' }">
@@ -106,32 +106,39 @@ const phaseMap: Record<string, string> = {
   day: "День",
 };
 
-watch(
-  [() => gameStore.room?.status, () => gameStore.room?.phase],
-  ([newStatus, newPhase], [oldStatus, oldPhase]) => {
+const roleSubtitleMap: Record<string, string> = {
+  mafia: "Ваша цель — истребить всех мирных жителей.",
+  citizen: "Ваша цель — найти и казнить всю мафию.",
+  doctor: "Каждую ночь вы можете кого-то одного от смерти. Помогайте мирным жителям.",
+  comissar: "Каждую ночь вы можете проверить одного игрока. Истрибите мафию.",
+  whore: "Каждую ночь вы можете лишить одного игрока голоса и действия. Помогайте мафии."
+};
 
-    if (oldStatus === 'waiting' && newStatus === 'in_progress') {
-      announcerTitle.value = 'Ваша роль';
-      announcerSubtitle.value = roleMap[gameStore.myRole || ''] || "pisyapopa";
-      isRoleAnnouncement.value = true;
-      showAnnouncer.value = true;
+watch([() => gameStore.room?.status, () => gameStore.room?.phase], ([newStatus, newPhase], [oldStatus, oldPhase]) => {
+  if (oldStatus === 'waiting' && newStatus === 'in_progress') {
+    const myRole = gameStore.myRole || '';
+    announcerTitle.value = roleMap[myRole] || myRole;
+    announcerSubtitle.value = roleSubtitleMap[myRole] || 'Выполняйте цели своей роли для победы.';
+
+    isRoleAnnouncement.value = true;
+    showAnnouncer.value = true;
+    return;
+  }
+  if (newPhase && newPhase !== oldPhase) {
+    if (isRoleAnnouncement.value && showAnnouncer.value) {
       return;
     }
-    if (newPhase && newPhase !== oldPhase) {
-      if (isRoleAnnouncement.value && showAnnouncer.value) {
-        return;
-      }
 
-      announcerTitle.value = phaseMap[newPhase] || 'Новая фаза';
-      announcerSubtitle.value = '';
-      isRoleAnnouncement.value = false;
-      showAnnouncer.value = true;
+    announcerTitle.value = phaseMap[newPhase] || 'Новая фаза';
+    announcerSubtitle.value = '';
+    isRoleAnnouncement.value = false;
+    showAnnouncer.value = true;
 
-      setTimeout(() => {
-        showAnnouncer.value = false;
-      }, 3500);
-    }
+    setTimeout(() => {
+      showAnnouncer.value = false;
+    }, 3500);
   }
+}
 );
 
 const handleAnnouncerClose = () => {
@@ -328,7 +335,7 @@ const startGame = () => {
 
 .back-btn {
   position: absolute;
-  left: 0;
+  left: -10px;
   top: 50%;
   transform: translateY(-50%);
   display: flex;
@@ -379,6 +386,7 @@ const startGame = () => {
 }
 
 .copy-icon {
+  display: none;
   width: 1.1em;
   height: 1.1em;
   opacity: 0.7;
@@ -435,5 +443,14 @@ const startGame = () => {
   .back-btn-text {
     display: inline;
   }
+
+  .copy-icon {
+    display: block;
+  }
+
+  .header h1:hover .copy-icon {
+    opacity: 1;
+  }
+
 }
 </style>

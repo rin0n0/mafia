@@ -4,7 +4,7 @@
     <p class="section-description">
       Опишите мир, в котором происходит игра. Ведущий будет использовать это для создания атмосферы.
     </p>
-    <textarea v-model="localEnviron" class="form-input environment-input"
+    <textarea v-model="localEnviron" class="form-input environment-input" maxlength="300"
       placeholder="Например: Гангстерский Чикаго 30-х" :disabled="!isHost" rows="3"></textarea>
     <transition name="fade">
       <div v-if="isHost && hasChanges" class="actions">

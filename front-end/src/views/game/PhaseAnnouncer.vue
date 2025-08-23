@@ -3,7 +3,7 @@
         <div v-if="show" class="announcer-overlay">
             <div class="announcer-content">
                 <h1 class="announcer-title">{{ title }}</h1>
-                <h2 v-if="subtitle" class="announcer-subtitle">{{ subtitle }}</h2>
+                <h2 v-if="subtitle" :class="subtitleClasses">{{ subtitle }}</h2>
                 <button v-if="isRole" @click="emit('close')" class="btn">Продолжить</button>
             </div>
         </div>
@@ -11,16 +11,29 @@
 </template>
 
 <script setup lang="ts">
-defineProps<{
+import { computed } from 'vue';
+
+const props = defineProps<{
     show: boolean;
     title: string;
     subtitle?: string;
     isRole?: boolean;
+    role?: string;
 }>();
 
 const emit = defineEmits<{
     (e: 'close'): void;
 }>();
+
+const subtitleClasses = computed(() => {
+    const classes = ['announcer-subtitle'];
+    if (props.role === 'mafia' || props.role === 'whore') {
+        classes.push('role-mafia');
+    } else {
+        classes.push('role-citizen');
+    }
+    return classes;
+});
 </script>
 
 <style scoped>
@@ -28,6 +41,8 @@ const emit = defineEmits<{
     position: fixed;
     inset: 0;
     background: rgba(0, 0, 0, 0.7);
+    width: 100vw;
+    height: 100vh;
     z-index: 1000;
     display: flex;
     align-items: center;
@@ -51,12 +66,25 @@ const emit = defineEmits<{
 
 .announcer-subtitle {
     font-size: 2.5rem;
+    padding: 0 20px;
     opacity: 0;
     animation: fade-in 0.5s 0.5s ease-out forwards;
-    color: var(--primary-brand-color);
     font-weight: 700;
     text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    transition: color 0.3s ease;
 }
+
+/* Новые классы для цвета ролей */
+.announcer-subtitle.role-mafia {
+    color: var(--primary-brand-color);
+    /* Красный для мафии */
+}
+
+.announcer-subtitle.role-citizen {
+    color: var(--citizen-color, #5ea8ff);
+    /* Синий/голубой для мирных */
+}
+
 
 .btn {
     margin-top: 3rem;
