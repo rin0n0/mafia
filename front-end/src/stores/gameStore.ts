@@ -9,23 +9,23 @@ import type {
   GameRoomPersonalizedResponse,
   Roles,
   WsMessage,
+  MyActionStatus,
+  PersonalEventPayload,
+  EmotePayload,
   JokeVotePayload,
   VoteResultsPayload,
-  EmotePayload,
+  GameEvent,
 } from "@/types/game";
 
-function updatePersonalState(
-  store: GameState,
-  data: GameRoomPersonalizedResponse
-) {
+function updateFullState(store: GameState, data: GameRoomPersonalizedResponse) {
   store.room = data.room_details;
   store.isHost = data.is_current_user_host;
-  if (data.my_role !== undefined) {
-    store.myRole = data.my_role;
-  }
+  store.myRole = data.my_role ?? null;
+  store.winner = data.winner ?? null;
+  store.myActionStatus = data.my_action_status ?? null;
+  store.lastEvents = data.room_details.last_events ?? [];
   store.error = null;
 }
-
 const API_BASE = "http://127.0.0.1:8000/api";
 const WS_BASE = "ws://127.0.0.1:8000/ws";
 
@@ -39,8 +39,10 @@ interface GameState {
   error: string | null;
   currentVoteQuestion: string | null;
   lastVoteResults: string | null;
+  winner: "mafia" | "citizens" | null;
+  myActionStatus: MyActionStatus | null;
+  lastEvents: GameEvent[];
 }
-
 export const useGameStore = defineStore("game", {
   state: (): GameState => ({
     room: null,
@@ -52,23 +54,41 @@ export const useGameStore = defineStore("game", {
     error: null,
     currentVoteQuestion: null,
     lastVoteResults: null,
+    winner: null,
+    myActionStatus: null,
+    lastEvents: [],
   }),
 
   getters: {
-    playerCount: (state) => {
-      if (!state.room?.players) {
-        return 0;
-      }
-      return state.room?.players.length;
-    },
-
-    myPlayerHasActed(state): boolean {
+    playerCount: (state): number => state.room?.players.length || 0,
+    myPlayer(state) {
       const userStore = useUserStore();
-      if (!state.room || !userStore.clientId) return false;
-      const me = state.room.players.find(
-        (p) => p.name === userStore.playerName
-      );
-      return me?.has_acted ?? false;
+      if (!state.room || !userStore.playerName) return null;
+      return state.room.players.find((p) => p.name === userStore.playerName);
+    },
+    myPlayerHasActed(state): boolean {
+      if (!this.myPlayer?.is_alive) return true;
+
+      const phase = state.room?.phase;
+      switch (phase) {
+        case "introduction_night":
+          return this.myPlayer?.has_acted ?? false;
+        case "day":
+        case "introduction_day":
+        case "voting":
+          return this.myPlayer?.has_acted ?? false;
+        case "night":
+          return state.myActionStatus?.has_acted ?? false;
+        default:
+          return false;
+      }
+    },
+    mafiaVoteMap(state): Map<string, string> {
+      const votes = state.myActionStatus?.mafia_kill_votes_by_name;
+      if (state.myRole !== "mafia" || !votes) {
+        return new Map();
+      }
+      return new Map(Object.entries(votes));
     },
   },
 
@@ -94,7 +114,7 @@ export const useGameStore = defineStore("game", {
             host_client_id: userStore.clientId,
           }
         );
-        updatePersonalState(this, response.data);
+        updateFullState(this, response.data);
         router.push(`/room/${this.room!.room_id}`);
       } catch (err: any) {
         this.error =
@@ -123,7 +143,7 @@ export const useGameStore = defineStore("game", {
             player_client_id: userStore.clientId,
           }
         );
-        updatePersonalState(this, response.data);
+        updateFullState(this, response.data);
         router.push(`/room/${this.room!.room_id}`);
       } catch (err: any) {
         this.error = err.response?.data?.detail || "Ошибка при входе в комнату";
@@ -152,7 +172,7 @@ export const useGameStore = defineStore("game", {
             },
           }
         );
-        updatePersonalState(this, response.data);
+        updateFullState(this, response.data);
       } catch (err: any) {
         this.error =
           "Вы не являетесь участником этой комнаты. Войдите, чтобы присоединиться.";
@@ -298,18 +318,18 @@ export const useGameStore = defineStore("game", {
         }
         switch (data.type) {
           case "personal_state_update": {
-            updatePersonalState(
-              this,
-              data.payload as GameRoomPersonalizedResponse
-            );
+            updateFullState(this, data.payload as GameRoomPersonalizedResponse);
             break;
           }
           case "public_state_update": {
             const oldPhase = this.room?.phase;
-
             const newRoomState = data.payload as GameRoomPublic;
             this.room = newRoomState;
-
+            if (oldPhase !== newRoomState.phase) {
+              this.lastEvents = [];
+            } else {
+              this.lastEvents = newRoomState.last_events ?? [];
+            }
             if (oldPhase !== newRoomState.phase) {
               console.log(
                 `Phase changed from ${oldPhase} to ${newRoomState.phase}. Clearing context.`
@@ -317,6 +337,12 @@ export const useGameStore = defineStore("game", {
               this.currentVoteQuestion = null;
               this.lastVoteResults = null;
             }
+            break;
+          }
+
+          case "personal_event": {
+            const payload = data.payload as PersonalEventPayload;
+            uiStore.addNotification(payload.text, 6000);
             break;
           }
           case "receive_emote": {

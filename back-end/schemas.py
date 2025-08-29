@@ -25,8 +25,12 @@ class PlayerRole(str, Enum):
 
 class ActionType(str, Enum):
     INTRODUCE = "introduce"
-    VOTE = "vote"
-    READY_FOR_VOTE = "ready_for_vote"
+    READY_FOR_VOTE = "ready_for_vote" 
+    VOTE = "vote" 
+    MAFIA_KILL = "mafia_kill"
+    DOCTOR_HEAL = "doctor_heal"
+    COMMISSAR_CHECK = "commissar_check"
+    WHORE_BLOCK = "whore_block"
 
 class Player(BaseModel):
     client_id: str 
@@ -48,9 +52,9 @@ class Winner(str, Enum):
 
 class NightActions(BaseModel):
     mafia_kill_votes: Dict[str, str] = Field(default_factory=dict) 
-    doctor_heal_target: Optional[str] = None
-    commissar_check_target: Optional[str] = None
-    whore_block_target: Optional[str] = None
+    doctor_heal_votes: Dict[str, str] = Field(default_factory=dict)
+    commissar_check_votes: Dict[str, str] = Field(default_factory=dict)
+    whore_block_votes: Dict[str, str] = Field(default_factory=dict)
 
 class GameRoom(BaseModel):
     room_id: str
@@ -65,7 +69,6 @@ class GameRoom(BaseModel):
     night_actions: NightActions = Field(default_factory=NightActions)
     last_events: List[Dict[str, Any]] = Field(default_factory=list)
     winner: Optional[Winner] = None
-
     phase_event: Optional[asyncio.Event] = Field(default=None, exclude=True)
     game_loop_task: Optional[asyncio.Task] = Field(default=None, exclude=True)
     class Config:
@@ -76,6 +79,7 @@ class PlayerPublic(BaseModel):
     is_alive: bool = True
     is_host: bool = False 
     has_acted: bool = False
+    role: Optional[PlayerRole] = None
 
 class GameRoomPublic(BaseModel):
     room_id: str
@@ -85,6 +89,7 @@ class GameRoomPublic(BaseModel):
     roles: Roles
     environ: Optional[str]
     day_number: int
+    last_events: List[Dict[str, Any]] = Field(default_factory=list)
 
 class CreateRoomRequest(BaseModel):
     host_name: str
@@ -112,4 +117,5 @@ class GameRoomPersonalizedResponse(BaseModel):
     room_details: GameRoomPublic
     is_current_user_host: bool
     my_role: Optional[PlayerRole] = None
-
+    winner: Optional[Winner] = None
+    teammates: List[str] = Field(default_factory=list)

@@ -3,6 +3,12 @@ export interface PlayerPublic {
   is_alive: boolean;
   is_host: boolean;
   has_acted: boolean;
+  role: string | null;
+}
+
+export interface GameEvent {
+  type: string;
+  text: string;
 }
 
 export interface GameRoomPublic {
@@ -13,6 +19,12 @@ export interface GameRoomPublic {
   day_number: number;
   roles: Roles;
   environ: string | null;
+  last_events: GameEvent[];
+}
+
+export interface MyActionStatus {
+  has_acted: boolean;
+  mafia_kill_votes_by_name?: { [voterName: string]: string };
 }
 
 export interface EmotePayload {
@@ -23,6 +35,8 @@ export interface GameRoomPersonalizedResponse {
   room_details: GameRoomPublic;
   is_current_user_host: boolean;
   my_role: string | null;
+  winner: "mafia" | "citizens" | null;
+  my_action_status: MyActionStatus | null;
 }
 
 export interface Roles {
@@ -40,6 +54,17 @@ export interface JokeVotePayload {
 export interface VoteResultsPayload {
   text: string;
 }
+export interface PersonalEventPayload {
+  text: string;
+}
+
+export type WsMessagePayload =
+  | GameRoomPublic
+  | GameRoomPersonalizedResponse
+  | JokeVotePayload
+  | VoteResultsPayload
+  | EmotePayload
+  | PersonalEventPayload;
 
 export interface WsMessage {
   type:
@@ -47,11 +72,7 @@ export interface WsMessage {
     | "personal_state_update"
     | "joke_vote_started"
     | "vote_results"
-    | "receive_emote";
-  payload:
-    | GameRoomPublic
-    | GameRoomPersonalizedResponse
-    | JokeVotePayload
-    | VoteResultsPayload
-    | EmotePayload;
+    | "receive_emote"
+    | "personal_event";
+  payload: WsMessagePayload;
 }
