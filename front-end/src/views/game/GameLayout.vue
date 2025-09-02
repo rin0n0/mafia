@@ -1,76 +1,90 @@
 <template>
     <div class="game-layout">
-        <MyRolePanel :role="gameStore.myRole" />
-        <div v-if="isDiscussionPhase" class="timer-bar">
-            <span>Обсуждение: {{ formattedTimeLeft }}</span>
-            <div class="timer-bar-inner" :style="{ width: timerProgress + '%' }"></div>
+        <MyRolePanel />
+        <NightActionsPanel v-if="gameStore.isNightActionPhase" :selected-player-name="selectedPlayerName"
+            @player-select="$emit('playerSelect', $event)" />
+        <div v-else class="day-view">
+            <HostDisplay :message="cleanedHostMessage" />
+            <div v-if="isDiscussionPhase" class="timer-bar">
+                <span>Обсуждение: {{ formattedTimeLeft }}</span>
+                <div class="timer-bar-inner" :style="{ width: timerProgress + '%' }"></div>
+            </div>
+            <PlayerGrid>
+                <PlayerCard v-for="player in gameStore.room?.players" :key="player.name" :player="player"
+                    :is-selectable="isPlayerSelectable(player)" :is-selected="player.name === selectedPlayerName"
+                    @click="isPlayerSelectable(player) && $emit('playerSelect', player.name)" />
+            </PlayerGrid>
         </div>
 
-        <HostDisplay :message="hostMessage" />
-
-        <IntroductionForm v-if="gameStore.room?.phase === 'introduction_night' && !gameStore.myPlayerHasActed"
-            @submit-description="submitDescription" />
-
-        <PlayerGrid v-else>
-            <PlayerCard v-for="player in gameStore.room?.players" :key="player.name" :player="player"
-                :is-selectable="isVotingPhase && player.is_alive && !gameStore.myPlayerHasActed"
-                :is-selected="player.name === selectedPlayerName"
-                @click="isVotingPhase && player.is_alive && !gameStore.myPlayerHasActed && $emit('playerSelect', player.name)" />
-        </PlayerGrid>
+        <div class="actions">
+            <button v-if="isDiscussionPhase" @click="readyForVote" :disabled="gameStore.myPlayerHasActed" class="btn">
+                {{ gameStore.myPlayerHasActed ? 'Ожидаем других...' : 'Готов к голосованию' }}
+            </button>
+            <button v-if="isVotingPhase" @click="submitVote"
+                :disabled="!selectedPlayerName || gameStore.myPlayerHasActed" class="btn">
+                {{ voteButtonText }}
+            </button>
+        </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted, computed, watch } from 'vue';
+import { computed, ref, watch, onUnmounted } from 'vue';
 import { useGameStore } from '@/stores/gameStore';
+import type { PlayerPublic } from '@/types/game';
 
+import MyRolePanel from './MyRolePanel.vue';
+import NightActionsPanel from './NightActionsPanel.vue';
 import HostDisplay from './HostDisplay.vue';
 import PlayerGrid from './PlayerGrid.vue';
 import PlayerCard from './PlayerCard.vue';
-import MyRolePanel from './MyRolePanel.vue';
-import IntroductionForm from './IntroductionForm.vue';
 
-defineProps<{
-    selectedPlayerName: string | null;
-}>();
+const props = defineProps<{ selectedPlayerName: string | null; }>();
 defineEmits(['playerSelect']);
 
 const gameStore = useGameStore();
-const DISCUSSION_TIME = 300; // 5 минут
+const DISCUSSION_TIME = 300;
 const timeLeft = ref(DISCUSSION_TIME);
 let timerInterval: number | null = null;
 
-const isResultsPhase = computed(() => !!gameStore.lastVoteResults);
-
-const isDiscussionPhase = computed(() =>
-    gameStore.room?.phase === 'introduction_day' &&
-    !gameStore.currentVoteQuestion &&
-    !isResultsPhase.value
-);
-
-const isVotingPhase = computed(() =>
-    gameStore.room?.phase === 'introduction_day' &&
-    !!gameStore.currentVoteQuestion &&
-    !isResultsPhase.value
-);
+const isDiscussionPhase = computed(() => {
+    const isCorrectPhase = gameStore.room?.phase === 'day' || gameStore.room?.phase === 'introduction_day';
+    return isCorrectPhase && !gameStore.currentVoteQuestion && !gameStore.lastVoteResults;
+});
+const isVotingPhase = computed(() => gameStore.isVotingPhase);
 
 const hostMessage = computed(() => {
-    if (isResultsPhase.value) return gameStore.lastVoteResults!;
-    if (isVotingPhase.value) return gameStore.currentVoteQuestion!;
-    if (isDiscussionPhase.value) return "Обсудите произошедшее!";
-
-    switch (gameStore.room?.phase) {
-        case 'introduction_night':
-            return 'Игроки знакомятся со своими ролями...';
-        case 'day':
-            return `Наступил день ${gameStore.room.day_number}. Город просыпается и обсуждает события прошедшей ночи.`;
-        case 'night':
-            return `Город засыпает. Просыпаются обладатели особых ролей...`;
-        default:
-            return 'Игра началась!';
+    if (gameStore.lastVoteResults) {
+        return gameStore.lastVoteResults;
     }
+
+    if (isVotingPhase.value) return gameStore.currentVoteQuestion || "Голосование за казнь! Выберите игрока.";
+    if (isDiscussionPhase.value) {
+        if (gameStore.room?.phase === 'day') return `День ${gameStore.room?.day_number}. Обсудите события ночи.`;
+        return "Первый день. Познакомьтесь и выскажите подозрения.";
+    }
+    if (gameStore.room?.phase === 'introduction_night') return "Ночь знакомств...";
+    return '...';
+});
+const isPlayerSelectable = (player: PlayerPublic) => {
+    if (!player.is_alive || gameStore.myPlayerHasActed) return false;
+    return isVotingPhase.value;
+};
+
+const voteButtonText = computed(() => {
+    if (gameStore.myPlayerHasActed) return 'Ожидаем других...';
+    if (props.selectedPlayerName) {
+        const actionText = gameStore.room?.phase === 'introduction_day' ? 'Голосовать за' : 'Казнить';
+        return `${actionText} "${props.selectedPlayerName}"`;
+    }
+    return 'Выберите игрока';
 });
 
+const readyForVote = () => gameStore.performAction('ready_for_vote', {});
+const submitVote = () => {
+    if (!props.selectedPlayerName) return;
+    gameStore.performAction('vote', { target_name: props.selectedPlayerName });
+};
 
 const startTimer = () => {
     stopTimer();
@@ -83,11 +97,15 @@ const startTimer = () => {
         }
     }, 1000);
 };
-
 const stopTimer = () => {
     if (timerInterval) clearInterval(timerInterval);
 };
 
+const cleanedHostMessage = computed(() => {
+    const message = hostMessage.value;
+    if (!message) return '';
+    return message.replace(/{{{|}}}/g, '');
+});
 watch(isDiscussionPhase, (isDiscussion) => {
     if (isDiscussion) {
         startTimer();
@@ -96,18 +114,13 @@ watch(isDiscussionPhase, (isDiscussion) => {
     }
 }, { immediate: true });
 onUnmounted(stopTimer);
-
 const formattedTimeLeft = computed(() => {
     const minutes = Math.floor(timeLeft.value / 60);
     const seconds = timeLeft.value % 60;
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 });
-
 const timerProgress = computed(() => (timeLeft.value / DISCUSSION_TIME) * 100);
 
-const submitDescription = (description: string) => {
-    gameStore.performAction('introduce', { description });
-};
 </script>
 
 <style scoped>
@@ -118,6 +131,21 @@ const submitDescription = (description: string) => {
     width: 100%;
 }
 
+.actions {
+    margin-top: 1rem;
+    max-width: 400px;
+    margin-left: auto;
+    margin-right: auto;
+    width: 100%;
+}
+
+.day-view {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+/* Стили для таймера, как в оригинальном файле */
 .timer-bar {
     width: 100%;
     background: var(--input-bg-color);

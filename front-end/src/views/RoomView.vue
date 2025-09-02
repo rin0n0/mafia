@@ -1,17 +1,20 @@
 <template>
-  <div class="room-view" :class="{ 'is-night': isNight }">
+  <div class="room-view" :class="{ 'is-night': gameStore.isNight }">
     <PhaseAnnouncer :show="showAnnouncer" :title="announcerTitle" :subtitle="announcerSubtitle"
       :is-role="isRoleAnnouncement" :role="gameStore.myRole || undefined" @close="handleAnnouncerClose" />
     <ErrorDisplay :message="gameStore.error" @close="gameStore.clearError()" />
+    <SpecialAnnouncement />
     <NotificationDisplay />
-    <div v-if="gameStore.room" class="room-content" :class="{ 'in-game': gameStore.room.status === 'in_progress' }">
+    <GameOverScreen v-if="gameStore.isGameOver" />
+    <DayResultsPanel v-if="shouldShowResultsPanel" />
 
+    <div v-else-if="gameStore.room" class="room-content"
+      :class="{ 'in-game': gameStore.room.status === 'in_progress' }">
       <div class="header">
         <router-link to="/" @click="gameStore.leaveRoom" class="back-btn" title="Покинуть комнату">
           <span class="back-btn-arrow">←</span>
           <span class="back-btn-text">Назад в лобби</span>
         </router-link>
-
         <div v-if="gameStore.room.status === 'waiting'" class="room-title-wrapper">
           <div>
             <h1 @click="copyRoomId" title="Нажмите, чтобы скопировать ID">
@@ -30,32 +33,18 @@
         <div class="room-title-wrapper-game" v-if="gameStore.room.status === 'in_progress'">
           <h1>Комната #{{ gameStore.room.room_id }}</h1>
         </div>
-
       </div>
 
       <LobbyLayout v-if="gameStore.room.status === 'waiting'" :players="gameStore.room.players"
         :roles="gameStore.room.roles" :initial-environment="gameStore.room.environ" :is-host="gameStore.isHost"
         :player-count="gameStore.playerCount" :is-loading="gameStore.isLoading" @update-roles="handleUpdateRoles"
         @update-environment="handleUpdateEnvironment" />
+
+      <IntroductionForm v-else-if="gameStore.room.phase === 'introduction_night' && !gameStore.myPlayerHasActed"
+        @submit-description="submitDescription" />
+
       <GameLayout v-else-if="gameStore.room.status === 'in_progress'" :selected-player-name="selectedPlayerName"
         @player-select="handlePlayerSelect" />
-
-      <div class="actions">
-        <button v-if="gameStore.room.status === 'waiting'" @click="startGame" class="btn start-game-btn"
-          :disabled="!gameStore.isHost || !canStartGame">
-          {{ startGameButtonText }}
-        </button>
-
-        <button v-if="isDiscussionPhase" @click="readyForVote" :disabled="gameStore.myPlayerHasActed" class="btn">
-          {{ gameStore.myPlayerHasActed ? 'Ожидаем других...' : 'Перейти к голосованию' }}
-        </button>
-
-        <button v-if="isVotingPhase" @click="submitVote" :disabled="!selectedPlayerName || gameStore.myPlayerHasActed"
-          class="btn">
-          {{ voteButtonText }}
-        </button>
-      </div>
-
     </div>
 
     <div v-else-if="gameStore.isLoading" class="state-panel">
@@ -75,9 +64,13 @@ import { useGameStore } from '@/stores/gameStore';
 import type { Roles } from '@/types/game';
 import NotificationDisplay from '@/views/ui/NotificationDisplay.vue';
 import LobbyLayout from './wait/LobbyLayout.vue';
-import GameLayout from './game/GameLayout.vue';
-import PhaseAnnouncer from './game/PhaseAnnouncer.vue';
-import ErrorDisplay from './ui/ErrorDisplay.vue';
+import GameLayout from '@/views/game/GameLayout.vue';
+import PhaseAnnouncer from '@/views/game/PhaseAnnouncer.vue';
+import SpecialAnnouncement from '@/views/game/SpecialAnnouncement.vue';
+import ErrorDisplay from '@/views/ui/ErrorDisplay.vue';
+import GameOverScreen from '@/views/game/GameOverScreen.vue';
+import IntroductionForm from '@/views/game/IntroductionForm.vue';
+import DayResultsPanel from '@/views/game/DayResultsPanel.vue';
 
 const gameStore = useGameStore();
 const route = useRoute();
@@ -88,24 +81,12 @@ const isRoleAnnouncement = ref(false);
 const isCopied = ref(false);
 const selectedPlayerName = ref<string | null>(null);
 
-
-const isNight = computed(() => gameStore.room?.phase?.includes('night'));
-
 const roleMap: Record<string, string> = {
-  mafia: "Мафия",
-  citizen: "Мирный житель",
-  doctor: "Доктор",
-  comissar: "Комиссар",
-  whore: "Потаскуха"
+  mafia: "Мафия", citizen: "Мирный житель", doctor: "Доктор", comissar: "Комиссар", whore: "Потаскуха"
 };
-
 const phaseMap: Record<string, string> = {
-  introduction_night: "Ночь знакомств",
-  introduction_day: "Первый день",
-  night: "Ночь",
-  day: "День",
+  introduction_night: "Ночь знакомств", introduction_day: "Первый день", night: "Ночь", day: "День", voting: "Голосование"
 };
-
 const roleSubtitleMap: Record<string, string> = {
   mafia: "Ваша цель — истребить всех мирных жителей.",
   citizen: "Ваша цель — найти и казнить всю мафию.",
@@ -119,32 +100,27 @@ watch([() => gameStore.room?.status, () => gameStore.room?.phase], ([newStatus, 
     const myRole = gameStore.myRole || '';
     announcerTitle.value = roleMap[myRole] || myRole;
     announcerSubtitle.value = roleSubtitleMap[myRole] || 'Выполняйте цели своей роли для победы.';
-
     isRoleAnnouncement.value = true;
     showAnnouncer.value = true;
     return;
   }
   if (newPhase && newPhase !== oldPhase) {
-    if (isRoleAnnouncement.value && showAnnouncer.value) {
-      return;
-    }
-
+    if (isRoleAnnouncement.value && showAnnouncer.value) return;
     announcerTitle.value = phaseMap[newPhase] || 'Новая фаза';
     announcerSubtitle.value = '';
     isRoleAnnouncement.value = false;
     showAnnouncer.value = true;
-
-    setTimeout(() => {
-      showAnnouncer.value = false;
-    }, 3500);
+    setTimeout(() => { showAnnouncer.value = false; }, 3500);
   }
-}
-);
+});
+
+const shouldShowResultsPanel = computed(() => {
+  return gameStore.lastEvents.length > 0 && !gameStore.isGameOver;
+});
 
 const handleAnnouncerClose = () => {
   const wasRoleAnnouncement = isRoleAnnouncement.value;
   showAnnouncer.value = false;
-
   if (wasRoleAnnouncement) {
     const currentPhase = gameStore.room?.phase;
     if (currentPhase && phaseMap[currentPhase]) {
@@ -153,62 +129,36 @@ const handleAnnouncerClose = () => {
         announcerSubtitle.value = '';
         isRoleAnnouncement.value = false;
         showAnnouncer.value = true;
-
-        setTimeout(() => {
-          showAnnouncer.value = false;
-        }, 3500);
+        setTimeout(() => { showAnnouncer.value = false; }, 3500);
       }, 500);
     }
   }
 };
 
+watch(() => gameStore.room?.phase, () => {
+  selectedPlayerName.value = null;
+});
 
 const copyRoomId = async () => {
   if (!gameStore.room?.room_id || isCopied.value) return;
   try {
     await navigator.clipboard.writeText(gameStore.room.room_id);
     isCopied.value = true;
-    setTimeout(() => {
-      isCopied.value = false;
-    }, 2000);
+    setTimeout(() => { isCopied.value = false; }, 2000);
   } catch (err) {
     console.error('Не удалось скопировать ID комнаты:', err);
   }
 };
 
 const handlePlayerSelect = (playerName: string) => {
-  if (selectedPlayerName.value === playerName) {
-    selectedPlayerName.value = null;
-  } else {
-    selectedPlayerName.value = playerName;
+  selectedPlayerName.value = selectedPlayerName.value === playerName ? null : playerName;
+  if (gameStore.myPlayerHasActed) {
+    setTimeout(() => { selectedPlayerName.value = null; }, 300);
   }
 };
 
-const isResultsPhase = computed(() => !!gameStore.lastVoteResults);
-
-const isDiscussionPhase = computed(() =>
-  gameStore.room?.phase === 'introduction_day' &&
-  !gameStore.currentVoteQuestion &&
-  !isResultsPhase.value
-);
-
-const isVotingPhase = computed(() =>
-  gameStore.room?.phase === 'introduction_day' &&
-  !!gameStore.currentVoteQuestion &&
-  !isResultsPhase.value
-);
-const voteButtonText = computed(() => {
-  if (gameStore.myPlayerHasActed) return 'Ожидаем других...';
-  if (selectedPlayerName.value) return `Голосовать за "${selectedPlayerName.value}"`;
-  return 'Выберите игрока для голосования';
-});
-
-const readyForVote = () => {
-  gameStore.performAction('ready_for_vote', {});
-};
-const submitVote = () => {
-  if (!selectedPlayerName.value) return;
-  gameStore.performAction('vote', { target_name: selectedPlayerName.value });
+const submitDescription = (description: string) => {
+  gameStore.performAction('introduce', { description });
 };
 
 onMounted(async () => {
@@ -222,6 +172,9 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  if (route.name === 'Room') {
+    return;
+  }
   gameStore.disconnectWebSocket();
 });
 
@@ -231,25 +184,6 @@ const handleUpdateRoles = (newRoles: Roles) => {
 
 const handleUpdateEnvironment = (newEnvironment: string | null) => {
   gameStore.setEnvironment(newEnvironment);
-};
-
-const canStartGame = computed(() => {
-  if (!gameStore.room) return false;
-  const totalRoles = Object.values(gameStore.room.roles).reduce((sum, count) => sum + count, 0);
-  return gameStore.room.players.length === totalRoles && totalRoles > 0;
-});
-
-const startGameButtonText = computed(() => {
-  if (!canStartGame.value) {
-    return 'Распределите роли';
-  }
-  return 'Начать игру';
-});
-
-const startGame = () => {
-  if (gameStore.isHost && canStartGame.value) {
-    gameStore.startGame();
-  }
 };
 </script>
 
@@ -294,9 +228,18 @@ const startGame = () => {
   opacity: 0;
 }
 
+/* --- ИСПРАВЛЕНИЕ ЗДЕСЬ --- */
+/* Когда наступает ночь, мы скрываем дневной фон... */
+.room-view.is-night::before {
+  opacity: 0;
+}
+
+/* ...и показываем ночной фон. */
 .room-view.is-night::after {
   opacity: 1;
 }
+
+/* --- КОНЕЦ ИСПРАВЛЕНИЯ --- */
 
 
 .room-content {
@@ -355,6 +298,12 @@ const startGame = () => {
   border-radius: 8px;
 }
 
+
+.room-content.in-game {
+  max-width: 900px;
+  padding-bottom: 80px;
+}
+
 .back-btn-arrow {
   font-size: 1.5rem;
   line-height: 1;
@@ -362,10 +311,6 @@ const startGame = () => {
 
 .back-btn-text {
   display: none;
-}
-
-.actions {
-  width: 100%;
 }
 
 .state-panel {
@@ -451,6 +396,5 @@ const startGame = () => {
   .header h1:hover .copy-icon {
     opacity: 1;
   }
-
 }
 </style>

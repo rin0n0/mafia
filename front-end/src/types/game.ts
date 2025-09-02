@@ -9,6 +9,7 @@ export interface PlayerPublic {
 export interface GameEvent {
   type: string;
   text: string;
+  killed_player_name?: string;
 }
 
 export interface GameRoomPublic {
@@ -22,11 +23,6 @@ export interface GameRoomPublic {
   last_events: GameEvent[];
 }
 
-export interface MyActionStatus {
-  has_acted: boolean;
-  mafia_kill_votes_by_name?: { [voterName: string]: string };
-}
-
 export interface EmotePayload {
   from_player: string;
 }
@@ -36,7 +32,8 @@ export interface GameRoomPersonalizedResponse {
   is_current_user_host: boolean;
   my_role: string | null;
   winner: "mafia" | "citizens" | null;
-  my_action_status: MyActionStatus | null;
+  teammates: string[];
+  team_votes: { [voterName: string]: string };
 }
 
 export interface Roles {

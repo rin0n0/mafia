@@ -119,3 +119,4 @@ class GameRoomPersonalizedResponse(BaseModel):
     my_role: Optional[PlayerRole] = None
     winner: Optional[Winner] = None
     teammates: List[str] = Field(default_factory=list)
+    team_votes: Dict[str, str] = Field(default_factory=dict)

@@ -1,5 +1,13 @@
 <template>
-    <div class="player-card" :class="{ 'is-dead': !player.is_alive, 'has-acted': player.has_acted }">
+    <div class="player-card" :class="{
+        'is-dead': !player.is_alive,
+        'is-selectable': isSelectable,
+        'is-selected': isSelected,
+        'is-me': isMyCard,
+    }">
+        <div class="card-border"></div>
+        <div v-if="player.has_acted" class="acted-indicator" title="Действие выполнено"></div>
+
         <div class="player-avatar">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor">
                 <path
@@ -8,16 +16,16 @@
             </svg>
         </div>
         <p class="player-name">{{ player.name }}</p>
-        <div v-if="player.is_host" class="host-badge" title="Хост комнаты">👑</div>
-        <div v-if="player.is_alive" class="status-icon">
-            <span v-if="player.has_acted" title="Действие выполнено">✔️</span>
-            <span v-else title="Ожидание...">⏳</span>
+
+        <div class="card-indicators">
+            <div v-if="isTeamTarget" class="indicator-icon" title="Выбор союзника">👁️</div>
+            <div v-if="player.is_host" class="indicator-icon" title="Хост комнаты">👑</div>
         </div>
+
         <div v-if="player.is_alive && !isMyCard" class="emote-wrapper">
-            <button @click.stop="sendEmote" class="emote-btn" title="Анонимно привлечь внимание" :disabled="emoteSent">
-                <span class="emote-icon">👁️</span>
-            </button>
+            <button @click.stop="sendEmote" class="emote-btn" title="Подмигнуть">😉</button>
         </div>
+
         <div v-if="!player.is_alive" class="dead-overlay">
             <span>ВЫБЫЛ</span>
         </div>
@@ -25,91 +33,77 @@
 </template>
 
 <script setup lang="ts">
-import type { PropType } from 'vue';
-import { ref } from 'vue';
+import { computed } from 'vue';
+import { useGameStore } from '@/stores/gameStore';
 import { useUserStore } from '@/stores/userStore';
 import type { PlayerPublic } from '@/types/game';
-import { useGameStore } from '@/stores/gameStore';
+
+const props = defineProps<{ player: PlayerPublic; isSelectable?: boolean; isSelected?: boolean; }>();
 const gameStore = useGameStore();
-
-const props = defineProps({
-    player: { type: Object as PropType<PlayerPublic>, required: true },
-    isSelectable: { type: Boolean, default: false },
-    isSelected: { type: Boolean, default: false },
-});
-
-const emoteSent = ref(false);
 const userStore = useUserStore();
-const isMyCard = props.player.name === userStore.playerName;
-
-const sendEmote = () => {
-    if (emoteSent.value) return;
-    console.log(`(имитация) Отправляем эмоцию игроку ${props.player.name}`);
-    gameStore.sendEmote(props.player.name);
-    emoteSent.value = true;
-    setTimeout(() => { emoteSent.value = false; }, 5000);
-};
+const isMyCard = computed(() => props.player.name === userStore.playerName);
+const isTeamTarget = computed(() => gameStore.getVotersForPlayer(props.player.name).length > 0);
+const sendEmote = () => gameStore.sendEmote(props.player.name);
 </script>
 
 <style scoped>
 .player-card {
-    background: var(--input-bg-color);
-    border: 2px solid var(--input-border-color);
-
-    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 12px;
     padding: 1rem;
     text-align: center;
     position: relative;
     overflow: hidden;
-    cursor: pointer;
-    transition: all 0.2s ease;
+    cursor: default;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
     aspect-ratio: 1 / 1.2;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
-    /* Убираем все сложные тени */
-    box-shadow: none;
+    border: 2px solid transparent;
+    /* Базовая прозрачная рамка */
 }
 
-.player-card.is-selectable:not(.is-dead):hover {
-    transform: translateY(-5px);
+.card-border {
+    position: absolute;
+    inset: 0;
+    border-radius: 12px;
+    border: 2px solid var(--input-border-color);
+    transition: border-color 0.2s ease;
+}
+
+.player-card.is-selectable:not(.is-dead) {
+    cursor: pointer;
+}
+
+.player-card.is-selectable:not(.is-dead):hover .card-border {
     border-color: var(--input-focus-border-color);
 }
 
-.player-card.is-selected {
+.player-card.is-selected .card-border {
     border-color: var(--primary-brand-color);
-    box-shadow: 0 0 15px var(--primary-brand-color);
-    transform: scale(1.05);
 }
 
-
-.player-card:not(.is-dead):hover {
-    /* Простой и понятный эффект приподнимания */
-    transform: translateY(-5px);
-    /* Подсветка рамки, как у полей ввода при фокусе */
-    border-color: var(--input-focus-border-color);
-    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+.player-card.is-me .card-border {
+    border-color: rgba(239, 233, 227, 0.4);
 }
 
-.player-card.is-dead {
-    opacity: 0.5;
-    filter: grayscale(100%);
-    cursor: not-allowed;
-    box-shadow: none;
-}
-
-.player-card.is-dead:hover {
-    transform: none;
-    border-color: var(--input-border-color);
+.acted-indicator {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 12px;
+    height: 12px;
+    background-color: #4CAF50;
+    border-radius: 50%;
+    box-shadow: 0 0 8px #4CAF50;
 }
 
 .player-avatar {
-    width: 50%;
-    margin-bottom: 0.75rem;
+    width: 45%;
+    margin-bottom: 0.5rem;
     color: var(--secondary-text-color);
-    filter: none;
-    /* Убираем тень с иконки */
 }
 
 .player-name {
@@ -117,23 +111,29 @@ const sendEmote = () => {
     font-size: 1rem;
     margin: 0;
     word-break: break-all;
-    text-shadow: none;
-    /* Убираем тень с текста */
 }
 
-.host-badge {
+.card-indicators {
     position: absolute;
-    top: 8px;
+    bottom: 8px;
     left: 8px;
+    display: flex;
+    gap: 0.5rem;
+}
+
+.indicator-icon {
     font-size: 1.2rem;
-    filter: none;
+}
+
+.player-card.is-dead {
+    opacity: 0.6;
+    filter: grayscale(80%);
 }
 
 .dead-overlay {
-    /* Стиль для этого элемента уже был хорош, оставляем */
     position: absolute;
     inset: 0;
-    background: rgba(150, 44, 39, 0.7);
+    background: rgba(80, 20, 20, 0.7);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -144,70 +144,23 @@ const sendEmote = () => {
     backdrop-filter: blur(2px);
 }
 
-.player-card.has-acted {
-    border-color: #4CAF50;
-}
-
-.status-icon {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    font-size: 1.2rem;
-}
-
 .emote-wrapper {
     position: absolute;
-    bottom: 8px;
-    right: 8px;
-    opacity: 0;
-    /* Скрыто по умолчанию */
-    transition: opacity 0.2s ease-in-out;
-}
-
-.player-card:hover .emote-wrapper {
-    opacity: 1;
-    /* Появляется при наведении на карточку */
+    bottom: 4px;
+    right: 4px;
 }
 
 .emote-btn {
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid var(--input-border-color);
-    border-radius: 50%;
-    width: 36px;
-    height: 36px;
+    background: transparent;
+    border: none;
+    font-size: 1.5rem;
     cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all 0.2s;
+    opacity: 0.6;
+    transition: all 0.2s ease;
 }
 
 .emote-btn:hover {
-    background: rgba(0, 0, 0, 0.7);
-    transform: scale(1.1);
-}
-
-.emote-btn:disabled {
-    cursor: not-allowed;
-    opacity: 0.5;
-    animation: send-anim 0.5s ease;
-}
-
-.emote-icon {
-    font-size: 1.2rem;
-}
-
-@keyframes send-anim {
-    0% {
-        transform: scale(1.2);
-    }
-
-    50% {
-        transform: scale(0.8);
-    }
-
-    100% {
-        transform: scale(1);
-    }
+    opacity: 1;
+    transform: scale(1.2);
 }
 </style>

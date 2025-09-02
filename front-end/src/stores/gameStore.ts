@@ -9,7 +9,6 @@ import type {
   GameRoomPersonalizedResponse,
   Roles,
   WsMessage,
-  MyActionStatus,
   PersonalEventPayload,
   EmotePayload,
   JokeVotePayload,
@@ -21,8 +20,9 @@ function updateFullState(store: GameState, data: GameRoomPersonalizedResponse) {
   store.room = data.room_details;
   store.isHost = data.is_current_user_host;
   store.myRole = data.my_role ?? null;
-  store.winner = data.winner ?? null;
-  store.myActionStatus = data.my_action_status ?? null;
+  store.winner = data.winner ?? store.winner;
+  store.teammates = data.teammates ?? [];
+  store.teamVotes = new Map(Object.entries(data.team_votes ?? {}));
   store.lastEvents = data.room_details.last_events ?? [];
   store.error = null;
 }
@@ -40,8 +40,10 @@ interface GameState {
   currentVoteQuestion: string | null;
   lastVoteResults: string | null;
   winner: "mafia" | "citizens" | null;
-  myActionStatus: MyActionStatus | null;
+  teammates: string[];
+  teamVotes: Map<string, string>;
   lastEvents: GameEvent[];
+  specialAnnouncement: string | null;
 }
 export const useGameStore = defineStore("game", {
   state: (): GameState => ({
@@ -55,8 +57,10 @@ export const useGameStore = defineStore("game", {
     currentVoteQuestion: null,
     lastVoteResults: null,
     winner: null,
-    myActionStatus: null,
+    teammates: [],
+    teamVotes: new Map(),
     lastEvents: [],
+    specialAnnouncement: null,
   }),
 
   getters: {
@@ -66,35 +70,54 @@ export const useGameStore = defineStore("game", {
       if (!state.room || !userStore.playerName) return null;
       return state.room.players.find((p) => p.name === userStore.playerName);
     },
-    myPlayerHasActed(state): boolean {
-      if (!this.myPlayer?.is_alive) return true;
-
-      const phase = state.room?.phase;
-      switch (phase) {
-        case "introduction_night":
-          return this.myPlayer?.has_acted ?? false;
-        case "day":
-        case "introduction_day":
-        case "voting":
-          return this.myPlayer?.has_acted ?? false;
-        case "night":
-          return state.myActionStatus?.has_acted ?? false;
-        default:
-          return false;
-      }
+    isNight(state): boolean {
+      return state.room?.phase?.includes("night") ?? false;
     },
-    mafiaVoteMap(state): Map<string, string> {
-      const votes = state.myActionStatus?.mafia_kill_votes_by_name;
-      if (state.myRole !== "mafia" || !votes) {
-        return new Map();
-      }
-      return new Map(Object.entries(votes));
+    isNightActionPhase(state): boolean {
+      return state.room?.phase === "night";
+    },
+    isDayDiscussionPhase(state): boolean {
+      return state.room?.phase === "day";
+    },
+    isVotingPhase(state): boolean {
+      return (
+        state.room?.phase === "voting" ||
+        (state.room?.phase === "introduction_day" &&
+          !!state.currentVoteQuestion)
+      );
+    },
+    isGameOver(state): boolean {
+      return state.room?.status === "finished";
+    },
+    myPlayerHasActed(): boolean {
+      if (!this.myPlayer?.is_alive) return true;
+      return this.myPlayer?.has_acted ?? false;
+    },
+    getVotersForPlayer: (state) => {
+      return (playerName: string): string[] => {
+        const voters: string[] = [];
+        if (state.teamVotes.size === 0) return voters;
+
+        for (const [voter, target] of state.teamVotes.entries()) {
+          if (target === playerName) {
+            voters.push(voter);
+          }
+        }
+        return voters;
+      };
     },
   },
 
   actions: {
     clearError() {
       this.error = null;
+    },
+    clearSpecialAnnouncement() {
+      this.specialAnnouncement = null;
+    },
+    clearResults() {
+      this.lastEvents = [];
+      this.lastVoteResults = null;
     },
     async createRoom() {
       const userStore = useUserStore();
@@ -307,60 +330,70 @@ export const useGameStore = defineStore("game", {
       };
 
       this.socket.onmessage = (event) => {
-        let data = JSON.parse(event.data);
-        if (typeof data === "string") {
+        let message = JSON.parse(event.data);
+        if (typeof message === "string") {
           try {
-            data = JSON.parse(data);
+            message = JSON.parse(message);
           } catch (e) {
             console.error("Failed to double-parse WebSocket message:", e);
             return;
           }
         }
-        switch (data.type) {
+        switch (message.type) {
           case "personal_state_update": {
-            updateFullState(this, data.payload as GameRoomPersonalizedResponse);
+            updateFullState(
+              this,
+              message.payload as GameRoomPersonalizedResponse
+            );
             break;
           }
           case "public_state_update": {
             const oldPhase = this.room?.phase;
-            const newRoomState = data.payload as GameRoomPublic;
-            this.room = newRoomState;
-            if (oldPhase !== newRoomState.phase) {
-              this.lastEvents = [];
-            } else {
-              this.lastEvents = newRoomState.last_events ?? [];
+            const publicState = message.payload as GameRoomPublic;
+            this.room = publicState;
+            if (publicState.phase !== "night") {
+              this.teamVotes.clear();
             }
-            if (oldPhase !== newRoomState.phase) {
-              console.log(
-                `Phase changed from ${oldPhase} to ${newRoomState.phase}. Clearing context.`
-              );
+            this.lastEvents = publicState.last_events ?? [];
+            if (
+              publicState.phase !== oldPhase &&
+              (publicState.phase === "night" || oldPhase === "night")
+            ) {
+              this.teamVotes.clear();
+            }
+            if (publicState.phase !== "introduction_day") {
               this.currentVoteQuestion = null;
+            }
+            if (
+              publicState.phase !== "voting" &&
+              publicState.phase !== "introduction_day"
+            ) {
               this.lastVoteResults = null;
             }
             break;
           }
 
           case "personal_event": {
-            const payload = data.payload as PersonalEventPayload;
-            uiStore.addNotification(payload.text, 6000);
+            this.specialAnnouncement = (
+              message.payload as PersonalEventPayload
+            ).text;
             break;
           }
           case "receive_emote": {
-            const payload = data.payload as EmotePayload;
+            const payload = message.payload as EmotePayload;
             uiStore.addNotification(
               `Игрок ${payload.from_player} таинственно вам подмигивает...`
             );
             break;
           }
           case "joke_vote_started": {
-            const payload = data.payload as JokeVotePayload;
+            const payload = message.payload as JokeVotePayload;
             this.currentVoteQuestion = payload.question;
             this.lastVoteResults = null;
             break;
           }
           case "vote_results": {
-            const payload = data.payload as VoteResultsPayload;
-            this.lastVoteResults = payload.text;
+            this.lastVoteResults = (message.payload as VoteResultsPayload).text;
             this.currentVoteQuestion = null;
             break;
           }

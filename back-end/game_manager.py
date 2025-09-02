@@ -160,6 +160,7 @@ class GameManager:
         room.phase = GamePhase.DAY
         room.day_votes.clear()
         room.phase_event = asyncio.Event()
+        room.last_events.clear()
         await self._broadcast_callback(room.room_id)
         print(f"Room {room.room_id}: Starting DAY {room.day_number} discussion. Timeout: 300s.")
         try: await asyncio.wait_for(room.phase_event.wait(), timeout=300.0)
@@ -169,6 +170,7 @@ class GameManager:
     async def _handle_voting(self, room: GameRoom):
         room.phase = GamePhase.VOTING
         room.phase_event = asyncio.Event()
+        room.last_events.clear()
         await self._broadcast_callback(room.room_id)
         print(f"Room {room.room_id}: Starting VOTING. Timeout: 90s.")
         try: await asyncio.wait_for(room.phase_event.wait(), timeout=90.0)
@@ -198,6 +200,7 @@ class GameManager:
     
     async def _handle_game_over(self, room: GameRoom):
         room.phase = GamePhase.GAME_OVER
+        room.last_events.clear()
         room.status = RoomStatus.FINISHED
         await self._broadcast_callback(room.room_id)
         print(f"Room {room.room_id}: GAME OVER. Winner: {room.winner}")
@@ -218,6 +221,24 @@ class GameManager:
         elif room.phase == GamePhase.NIGHT:
             raise HTTPException(status_code=400, detail="Неверное действие для текущей фазы")
         await self._broadcast_callback(room_id)
+        
+        if room.phase == GamePhase.NIGHT and player.role != PlayerRole.CITIZEN and self._connection_manager:
+            team_members = [p for p in room.players if p.role == player.role and p.is_alive]
+            for member in team_members:
+                personalized_view = create_personalized_room_view(room, for_client_id=member.client_id)
+                personal_message = WsMessage(type="personal_state_update", payload=personalized_view.model_dump())
+                await self._connection_manager.send_personal_message(room_id, member.client_id, personal_message.model_dump_json())
+            
+            all_player_ids = {p.client_id for p in room.players}
+            team_ids = {m.client_id for m in team_members}
+            other_player_ids = all_player_ids - team_ids
+            
+            public_view = create_public_room_view(room)
+            public_message = WsMessage(type="public_state_update", payload=public_view.model_dump())
+            for other_client_id in other_player_ids:
+                 await self._connection_manager.send_personal_message(room_id, other_client_id, public_message.model_dump_json())
+        else:
+            await self._broadcast_callback(room_id)
             
     def _handle_introduce_action(self, room: GameRoom, player: Player, payload: dict):
         description = payload.get("description")
@@ -491,10 +512,29 @@ def create_personalized_room_view(room: GameRoom, for_client_id: str) -> GameRoo
             if p.role == my_role and p.is_alive and p.client_id != for_client_id:
                 teammates_list.append(p.name)
 
+    team_votes_map = {}
+    if room.phase == GamePhase.NIGHT and my_role and my_role != PlayerRole.CITIZEN:
+        votes_attr_map = {
+            PlayerRole.MAFIA: room.night_actions.mafia_kill_votes,
+            PlayerRole.DOCTOR: room.night_actions.doctor_heal_votes,
+            PlayerRole.COMMISSAR: room.night_actions.commissar_check_votes,
+            PlayerRole.WHORE: room.night_actions.whore_block_votes,
+        }
+        
+        current_team_votes = votes_attr_map.get(my_role, {})
+        if current_team_votes:
+            id_to_name_map = {p.client_id: p.name for p in room.players}
+            for voter_id, target_id in current_team_votes.items():
+                voter_name = id_to_name_map.get(voter_id)
+                target_name = id_to_name_map.get(target_id)
+                if voter_name and target_name:
+                    team_votes_map[voter_name] = target_name
+
     return GameRoomPersonalizedResponse(
         room_details=public_view,
         is_current_user_host=is_host,
         my_role=my_role,
         winner=room.winner,
-        teammates=teammates_list
+        teammates=teammates_list,
+        team_votes=team_votes_map 
     )

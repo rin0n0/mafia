@@ -25,7 +25,8 @@
           Создать комнату
         </button><br />
         <p class="form-label">Присоединиться к комнате по коду</p>
-        <input v-model="joinRoomId" class="form-input room-code-input" placeholder="КОД" maxlength="4">
+        <input v-model="joinRoomId" class="form-input room-code-input" placeholder="КОД" maxlength="4"
+          @keydown.enter.prevent="joinGame">
 
         <button class="btn" @click="joinGame" :disabled="joinRoomId.length < 4">
           Присоединиться
