@@ -39,11 +39,11 @@ import { useGameStore } from '@/stores/gameStore';
 const gameStore = useGameStore();
 
 const winnerTeamText = computed(() => {
-    return gameStore.winner === 'mafia' ? 'Победила Мафия!' : 'Победили Мирные жители!';
+    return gameStore.room?.winner === 'mafia' ? 'Победила Мафия!' : 'Победили Мирные жители!';
 });
 
 const winnerTeamClass = computed(() => {
-    return gameStore.winner === 'mafia' ? 'mafia-win' : 'citizens-win';
+    return gameStore.room?.winner === 'mafia' ? 'mafia-win' : 'citizens-win';
 });
 
 const mafiaTeam = computed(() => gameStore.room?.players.filter(p => p.role === 'mafia' || p.role === 'whore') || []);

@@ -115,8 +115,9 @@ watch([() => gameStore.room?.status, () => gameStore.room?.phase], ([newStatus, 
 });
 
 const shouldShowResultsPanel = computed(() => {
-  return gameStore.lastEvents.length > 0 && !gameStore.isGameOver;
+  return (gameStore.room?.last_events?.length ?? 0) > 0 && !gameStore.isGameOver;
 });
+
 
 const handleAnnouncerClose = () => {
   const wasRoleAnnouncement = isRoleAnnouncement.value;

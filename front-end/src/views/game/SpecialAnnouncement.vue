@@ -13,7 +13,7 @@ import { useGameStore } from '@/stores/gameStore';
 const gameStore = useGameStore();
 
 const formattedText = computed(() =>
-    gameStore.specialAnnouncement?.replace(/{{{(.*?)}}}/g, '<strong class="player-name-highlight">$1</strong>') || ''
+    gameStore.specialAnnouncement?.replace(/{{(.*?)}}/g, '<strong class="player-name-highlight">$1</strong>') || ''
 );
 
 const clear = () => {

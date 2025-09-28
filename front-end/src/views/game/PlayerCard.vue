@@ -16,14 +16,8 @@
             </svg>
         </div>
         <p class="player-name">{{ player.name }}</p>
-
-        <div class="card-indicators">
-            <div v-if="isTeamTarget" class="indicator-icon" title="Выбор союзника">👁️</div>
-            <div v-if="player.is_host" class="indicator-icon" title="Хост комнаты">👑</div>
-        </div>
-
         <div v-if="player.is_alive && !isMyCard" class="emote-wrapper">
-            <button @click.stop="sendEmote" class="emote-btn" title="Подмигнуть">😉</button>
+            <button @click.stop="sendEmote" class="emote-btn" title="Подмигнуть">👁️</button>
         </div>
 
         <div v-if="!player.is_alive" class="dead-overlay">
@@ -55,14 +49,13 @@ const sendEmote = () => gameStore.sendEmote(props.player.name);
     position: relative;
     overflow: hidden;
     cursor: default;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: transform display 0.2s ease, box-shadow 0.2s ease;
     aspect-ratio: 1 / 1.2;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     border: 2px solid transparent;
-    /* Базовая прозрачная рамка */
 }
 
 .card-border {
@@ -108,9 +101,16 @@ const sendEmote = () => gameStore.sendEmote(props.player.name);
 
 .player-name {
     font-weight: 700;
-    font-size: 1rem;
+    font-size: 0.9rem;
     margin: 0;
+    line-height: 1.2;
+    min-height: 2.2em;
+    overflow-wrap: break-word;
     word-break: break-all;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
 }
 
 .card-indicators {
@@ -155,6 +155,11 @@ const sendEmote = () => gameStore.sendEmote(props.player.name);
     border: none;
     font-size: 1.5rem;
     cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.player-card:hover .emote-btn {
     opacity: 0.6;
     transition: all 0.2s ease;
 }

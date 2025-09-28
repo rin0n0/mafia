@@ -14,16 +14,15 @@ import type {
   JokeVotePayload,
   VoteResultsPayload,
   GameEvent,
+  GameEventPayload,
 } from "@/types/game";
 
 function updateFullState(store: GameState, data: GameRoomPersonalizedResponse) {
   store.room = data.room_details;
   store.isHost = data.is_current_user_host;
   store.myRole = data.my_role ?? null;
-  store.winner = data.winner ?? store.winner;
   store.teammates = data.teammates ?? [];
   store.teamVotes = new Map(Object.entries(data.team_votes ?? {}));
-  store.lastEvents = data.room_details.last_events ?? [];
   store.error = null;
 }
 const API_BASE = "http://127.0.0.1:8000/api";
@@ -37,12 +36,8 @@ interface GameState {
   isConnected: boolean;
   isLoading: boolean;
   error: string | null;
-  currentVoteQuestion: string | null;
-  lastVoteResults: string | null;
-  winner: "mafia" | "citizens" | null;
   teammates: string[];
   teamVotes: Map<string, string>;
-  lastEvents: GameEvent[];
   specialAnnouncement: string | null;
 }
 export const useGameStore = defineStore("game", {
@@ -54,15 +49,10 @@ export const useGameStore = defineStore("game", {
     isConnected: false,
     isLoading: false,
     error: null,
-    currentVoteQuestion: null,
-    lastVoteResults: null,
-    winner: null,
     teammates: [],
     teamVotes: new Map(),
-    lastEvents: [],
     specialAnnouncement: null,
   }),
-
   getters: {
     playerCount: (state): number => state.room?.players.length || 0,
     myPlayer(state) {
@@ -77,13 +67,13 @@ export const useGameStore = defineStore("game", {
       return state.room?.phase === "night";
     },
     isDayDiscussionPhase(state): boolean {
-      return state.room?.phase === "day";
+      return (
+        state.room?.phase === "day" || state.room?.phase === "introduction_day"
+      );
     },
     isVotingPhase(state): boolean {
       return (
-        state.room?.phase === "voting" ||
-        (state.room?.phase === "introduction_day" &&
-          !!state.currentVoteQuestion)
+        state.room?.phase === "voting" || state.room?.phase === "joke_voting"
       );
     },
     isGameOver(state): boolean {
@@ -114,10 +104,6 @@ export const useGameStore = defineStore("game", {
     },
     clearSpecialAnnouncement() {
       this.specialAnnouncement = null;
-    },
-    clearResults() {
-      this.lastEvents = [];
-      this.lastVoteResults = null;
     },
     async createRoom() {
       const userStore = useUserStore();
@@ -348,27 +334,10 @@ export const useGameStore = defineStore("game", {
             break;
           }
           case "public_state_update": {
-            const oldPhase = this.room?.phase;
             const publicState = message.payload as GameRoomPublic;
             this.room = publicState;
             if (publicState.phase !== "night") {
               this.teamVotes.clear();
-            }
-            this.lastEvents = publicState.last_events ?? [];
-            if (
-              publicState.phase !== oldPhase &&
-              (publicState.phase === "night" || oldPhase === "night")
-            ) {
-              this.teamVotes.clear();
-            }
-            if (publicState.phase !== "introduction_day") {
-              this.currentVoteQuestion = null;
-            }
-            if (
-              publicState.phase !== "voting" &&
-              publicState.phase !== "introduction_day"
-            ) {
-              this.lastVoteResults = null;
             }
             break;
           }
@@ -384,17 +353,6 @@ export const useGameStore = defineStore("game", {
             uiStore.addNotification(
               `Игрок ${payload.from_player} таинственно вам подмигивает...`
             );
-            break;
-          }
-          case "joke_vote_started": {
-            const payload = message.payload as JokeVotePayload;
-            this.currentVoteQuestion = payload.question;
-            this.lastVoteResults = null;
-            break;
-          }
-          case "vote_results": {
-            this.lastVoteResults = (message.payload as VoteResultsPayload).text;
-            this.currentVoteQuestion = null;
             break;
           }
         }

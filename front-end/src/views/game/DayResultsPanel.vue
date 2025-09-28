@@ -1,12 +1,11 @@
 <template>
-    <div class="results-overlay" @click="dismiss">
+    <div class="results-overlay">
         <div class="results-content">
             <h3>{{ panelTitle }}</h3>
             <div v-for="(item, index) in resultItems" :key="index" class="event-item">
                 <span class="event-icon">{{ item.icon }}</span>
                 <p class="event-text" v-html="item.text"></p>
             </div>
-            <button class="btn" @click="dismiss">Понятно</button>
         </div>
     </div>
 </template>
@@ -26,18 +25,14 @@ const eventIcons: Record<string, string> = {
     kill: '💀', save: '🛡️', no_kill: '🌙', lynch_result: '⚖️', joke_vote_result: '🤡'
 };
 
-const formatText = (text: string) => text.replace(/{{{(.*?)}}}/g, '<strong class="player-name-highlight">$1</strong>');
+const formatText = (text: string) => text.replace(/{{(.*?)}}/g, '<strong class="player-name-highlight">$1</strong>');
 
 const resultItems = computed(() => {
-    return gameStore.lastEvents.map(event => ({
+    return (gameStore.room?.last_events ?? []).map(event => ({
         icon: eventIcons[event.type] || '🔹',
         text: formatText(event.text)
     }));
 });
-
-const dismiss = () => {
-    gameStore.clearResults();
-};
 </script>
 
 <style scoped>

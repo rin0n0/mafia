@@ -18,6 +18,7 @@ export interface GameRoomPublic {
   status: "waiting" | "in_progress" | "finished";
   phase: string | null;
   day_number: number;
+  winner: "mafia" | "citizens" | null;
   roles: Roles;
   environ: string | null;
   last_events: GameEvent[];
@@ -55,21 +56,23 @@ export interface PersonalEventPayload {
   text: string;
 }
 
+export type GameEventPayload = GameEvent;
+
 export type WsMessagePayload =
   | GameRoomPublic
   | GameRoomPersonalizedResponse
   | JokeVotePayload
-  | VoteResultsPayload
   | EmotePayload
-  | PersonalEventPayload;
+  | PersonalEventPayload
+  | GameEventPayload;
 
 export interface WsMessage {
   type:
     | "public_state_update"
     | "personal_state_update"
     | "joke_vote_started"
-    | "vote_results"
     | "receive_emote"
-    | "personal_event";
+    | "personal_event"
+    | "game_event";
   payload: WsMessagePayload;
 }

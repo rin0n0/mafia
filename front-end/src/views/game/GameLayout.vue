@@ -43,38 +43,46 @@ const props = defineProps<{ selectedPlayerName: string | null; }>();
 defineEmits(['playerSelect']);
 
 const gameStore = useGameStore();
-const DISCUSSION_TIME = 300;
+const DISCUSSION_TIME = 180;
 const timeLeft = ref(DISCUSSION_TIME);
 let timerInterval: number | null = null;
 
 const isDiscussionPhase = computed(() => {
-    const isCorrectPhase = gameStore.room?.phase === 'day' || gameStore.room?.phase === 'introduction_day';
-    return isCorrectPhase && !gameStore.currentVoteQuestion && !gameStore.lastVoteResults;
+    const phase = gameStore.room?.phase;
+    return phase === 'day' || phase === 'introduction_day';
 });
+
 const isVotingPhase = computed(() => gameStore.isVotingPhase);
 
 const hostMessage = computed(() => {
-    if (gameStore.lastVoteResults) {
-        return gameStore.lastVoteResults;
-    }
+    const phase = gameStore.room?.phase;
+    const day = gameStore.room?.day_number;
 
-    if (isVotingPhase.value) return gameStore.currentVoteQuestion || "Голосование за казнь! Выберите игрока.";
-    if (isDiscussionPhase.value) {
-        if (gameStore.room?.phase === 'day') return `День ${gameStore.room?.day_number}. Обсудите события ночи.`;
-        return "Первый день. Познакомьтесь и выскажите подозрения.";
+    switch (phase) {
+        case 'introduction_night':
+            return "Ночь знакомств. Расскажите ведущему о себе в форме ниже.";
+        case 'introduction_day':
+            return "Первый день. Познакомьтесь друг с другом и обсудите, кто кажется вам подозрительным.";
+        case 'day':
+            return `День ${day}. Обсудите события прошедшей ночи и решите, кто следующий кандидат на выбывание.`;
+        case 'joke_voting':
+            return "Шуточное голосование! Выберите самого подозрительного игрока. Это ни на что не повлияет... пока что.";
+        case 'voting':
+            return "Голосование за казнь! Выберите игрока, которого вы считаете мафией.";
+        default:
+            return 'Ожидание следующей фазы...';
     }
-    if (gameStore.room?.phase === 'introduction_night') return "Ночь знакомств...";
-    return '...';
 });
 const isPlayerSelectable = (player: PlayerPublic) => {
     if (!player.is_alive || gameStore.myPlayerHasActed) return false;
     return isVotingPhase.value;
 };
 
+
 const voteButtonText = computed(() => {
     if (gameStore.myPlayerHasActed) return 'Ожидаем других...';
     if (props.selectedPlayerName) {
-        const actionText = gameStore.room?.phase === 'introduction_day' ? 'Голосовать за' : 'Казнить';
+        const actionText = gameStore.room?.phase === 'joke_voting' ? 'Голосовать за' : 'Казнить';
         return `${actionText} "${props.selectedPlayerName}"`;
     }
     return 'Выберите игрока';
@@ -100,12 +108,12 @@ const startTimer = () => {
 const stopTimer = () => {
     if (timerInterval) clearInterval(timerInterval);
 };
-
 const cleanedHostMessage = computed(() => {
     const message = hostMessage.value;
     if (!message) return '';
     return message.replace(/{{{|}}}/g, '');
 });
+
 watch(isDiscussionPhase, (isDiscussion) => {
     if (isDiscussion) {
         startTimer();
@@ -113,12 +121,15 @@ watch(isDiscussionPhase, (isDiscussion) => {
         stopTimer();
     }
 }, { immediate: true });
+
 onUnmounted(stopTimer);
+
 const formattedTimeLeft = computed(() => {
     const minutes = Math.floor(timeLeft.value / 60);
     const seconds = timeLeft.value % 60;
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
 });
+
 const timerProgress = computed(() => (timeLeft.value / DISCUSSION_TIME) * 100);
 
 </script>
@@ -145,7 +156,6 @@ const timerProgress = computed(() => (timeLeft.value / DISCUSSION_TIME) * 100);
     gap: 1.5rem;
 }
 
-/* Стили для таймера, как в оригинальном файле */
 .timer-bar {
     width: 100%;
     background: var(--input-bg-color);

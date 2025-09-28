@@ -11,6 +11,7 @@ class RoomStatus(str, Enum):
 class GamePhase(str, Enum):
     INTRODUCTION_NIGHT = "introduction_night"
     INTRODUCTION_DAY = "introduction_day"
+    JOKE_VOTING = "joke_voting"
     NIGHT = "night"
     DAY = "day"
     VOTING = "voting"
@@ -47,8 +48,8 @@ class Roles (BaseModel):
     whore: int = 0
 
 class Winner(str, Enum):
-    MAFIA = "mafia"
-    CITIZENS = "citizens"
+    mafia = "mafia"
+    citizens = "citizens"
 
 class NightActions(BaseModel):
     mafia_kill_votes: Dict[str, str] = Field(default_factory=dict) 
@@ -60,17 +61,24 @@ class GameRoom(BaseModel):
     room_id: str
     players: List[Player] = []
     status: RoomStatus = RoomStatus.WAITING
-    host_id: str  
+    host_id: str
     roles: Roles = Field(default_factory=Roles)
     environ: Optional[str] = None
-    phase: Optional[GamePhase] = None    
+    phase: Optional[GamePhase] = None
     day_number: int = 0
-    day_votes: Dict[str, str] = Field(default_factory=dict)
+    
+    ready_votes: Dict[str, bool] = Field(default_factory=dict)
+    joke_votes: Dict[str, str] = Field(default_factory=dict)
+    lynch_votes: Dict[str, str] = Field(default_factory=dict)
+    
     night_actions: NightActions = Field(default_factory=NightActions)
     last_events: List[Dict[str, Any]] = Field(default_factory=list)
     winner: Optional[Winner] = None
+
     phase_event: Optional[asyncio.Event] = Field(default=None, exclude=True)
     game_loop_task: Optional[asyncio.Task] = Field(default=None, exclude=True)
+    lock: asyncio.Lock = Field(default_factory=asyncio.Lock, exclude=True) 
+
     class Config:
         arbitrary_types_allowed = True
 
@@ -90,6 +98,7 @@ class GameRoomPublic(BaseModel):
     environ: Optional[str]
     day_number: int
     last_events: List[Dict[str, Any]] = Field(default_factory=list)
+    winner: Optional[Winner] = None
 
 class CreateRoomRequest(BaseModel):
     host_name: str
