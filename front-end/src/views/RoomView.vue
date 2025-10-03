@@ -85,7 +85,7 @@ const roleMap: Record<string, string> = {
   mafia: "Мафия", citizen: "Мирный житель", doctor: "Доктор", comissar: "Комиссар", whore: "Потаскуха"
 };
 const phaseMap: Record<string, string> = {
-  introduction_night: "Ночь знакомств", introduction_day: "Первый день", night: "Ночь", day: "День", voting: "Голосование"
+  introduction_night: "Ночь знакомств", introduction_day: "Первый день", night: "Ночь", day: "День", voting: "Голосование", game_over:"Конец игры"
 };
 const roleSubtitleMap: Record<string, string> = {
   mafia: "Ваша цель — истребить всех мирных жителей.",
