@@ -110,6 +110,7 @@ class GameManager:
             await self._handle_game_over(room)
         except asyncio.CancelledError:
             logger.info(f"Game loop for room {room.room_id} was cancelled.")
+            await self._delete_room(room.room_id)
         except Exception as e:
             logger.error(f"Error in game loop for room {room.room_id}: {e}", exc_info=True)
 
@@ -325,7 +326,6 @@ class GameManager:
             room.winner = Winner.citizens.name 
         elif mafia_count >= citizen_team_count:
             room.winner = Winner.mafia.name 
-            
         return room.winner is not None
     
     def _get_team_target(self, votes: Dict[str, str], ignored_voters: List[str] = []) -> Optional[str]:
@@ -341,6 +341,7 @@ class GameManager:
         room.status = RoomStatus.FINISHED
         await self._safe_broadcast(room.room_id)
         logger.info(f"Room {room.room_id}: GAME OVER. Winner: {room.winner}")
+        asyncio.create_task(self._delete_room_after_delay(room.room_id, 60))
     
     def schedule_player_removal(self, room_id: str, client_id: str, delay: int = 10):
         asyncio.create_task(self._remove_player_after_delay(room_id, client_id, delay))
@@ -363,18 +364,26 @@ class GameManager:
                         self._check_phase_completion(room)
                 elif room.status == RoomStatus.WAITING:
                     room.players = [p for p in room.players if p.client_id != client_id]
-                    if not room.players: return self._delete_room(room.room_id)
+                    if not room.players: return await self._delete_room(room.room_id)
                     if room.host_id == client_id: room.host_id = room.players[0].client_id
                     logger.info(f"Player {player_to_remove.name} removed from lobby.")
                 
                 await self._safe_broadcast(room.room_id)
         except (HTTPException, KeyError): pass
 
-    def _delete_room(self, room_id: str):
+    async def _delete_room(self, room_id: str):
         if room_id in self.active_rooms:
             room = self.active_rooms.pop(room_id)
             if room.game_loop_task and not room.game_loop_task.done(): room.game_loop_task.cancel()
             logger.info(f"Room {room_id} and its tasks have been deleted.")
+            if self._connection_manager:
+                await self._connection_manager.close_and_remove_room_connections(room_id)
+
+    async def _delete_room_after_delay(self, room_id: str, delay: int):
+        await asyncio.sleep(delay)
+        if room_id in self.active_rooms:
+            logger.info(f"Deleting room {room_id} after delay.")
+            await self._delete_room(room_id)
 
     def set_roles_settings(self, room_id: str, client_id: str, new_roles: Roles) -> GameRoom:
         room = self.get_room(room_id)

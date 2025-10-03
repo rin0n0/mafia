@@ -24,7 +24,7 @@ watch(() => gameStore.specialAnnouncement, (newVal) => {
     if (newVal) {
         setTimeout(() => {
             clear();
-        }, 6000);
+        }, 4000);
     }
 });
 </script>
