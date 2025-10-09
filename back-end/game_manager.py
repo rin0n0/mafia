@@ -3,12 +3,12 @@ import logging
 import random
 import string
 from collections import Counter
-from typing import Callable, Awaitable, Dict, List, Optional, Any
+from typing import Dict, List, Optional
 
 from fastapi import HTTPException
 
 from schemas import *
-from connection_manager import ConnectionManager
+from game_notifier import GameNotifier
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -32,20 +32,10 @@ PHASE_TRANSITIONS: Dict[GamePhase, GamePhase] = {
 }
 
 class GameManager:
-    def __init__(self):
+    def __init__(self, notifier: GameNotifier):
         self.active_rooms: Dict[str, GameRoom] = {}
         self.MAX_ROOMS_PER_HOST = 3
-        self._connection_manager: Optional[ConnectionManager] = None
-        self._broadcast_callback: Optional[Callable[[str], Awaitable[None]]] = None
-
-    def set_connection_manager(self, manager: ConnectionManager): self._connection_manager = manager
-    def set_broadcast_callback(self, callback: Callable[[str], Awaitable[None]]): self._broadcast_callback = callback
-
-    async def _safe_broadcast(self, room_id: str):
-        if self._broadcast_callback:
-            await self._broadcast_callback(room_id)
-        else:
-            logger.warning(f"Room {room_id}: broadcast_callback is not set.")
+        self._notifier = notifier
 
     def _generate_room_id(self) -> str:
         while True:
@@ -141,7 +131,7 @@ class GameManager:
             elif phase == GamePhase.NIGHT: await self._process_night_results(room)
             
             if phase in [GamePhase.JOKE_VOTING, GamePhase.VOTING, GamePhase.NIGHT]:
-                await self._safe_broadcast(room.room_id)
+                await self._notifier.notify_room_update(room)
                 await asyncio.sleep(RESULTS_DISPLAY_PAUSE)
 
     async def _advance_to_next_phase(self, room: GameRoom):
@@ -159,8 +149,9 @@ class GameManager:
             elif next_phase in [GamePhase.INTRODUCTION_DAY, GamePhase.DAY]: room.ready_votes.clear()
             elif next_phase == GamePhase.JOKE_VOTING:
                 room.ready_votes.clear(); room.joke_votes.clear()
+            
             room.phase = next_phase
-            await self._safe_broadcast(room.room_id)
+            await self._notifier.notify_room_update(room)
 
     async def process_action(self, room_id: str, client_id: str, action: PlayerActionRequest):
         room = self.get_room(room_id)
@@ -185,7 +176,7 @@ class GameManager:
             else: raise HTTPException(status_code=400, detail="Неверное действие для текущей фазы")
             
             self._check_phase_completion(room)
-            await self._safe_broadcast(room.room_id)
+            await self._notifier.notify_room_update(room)
             
     def _handle_vote(self, room: GameRoom, player: Player, payload: dict, vote_dict: Dict[str, str]):
         target_name = payload.get("target_name")
@@ -263,7 +254,6 @@ class GameManager:
                 result_text = f"По итогам шуточного голосования, самым подозрительным посчитали игрока {self._sanitize_for_llm(winner_name)}!"
         event_data = {"type": "joke_vote_result", "text": result_text}
         room.last_events.append(event_data) 
-
         
     async def _process_lynch_vote_results(self, room: GameRoom):
         if not room.lynch_votes: result_text = "Голосование завершилось безрезультатно, никто не был казнен."
@@ -289,15 +279,14 @@ class GameManager:
         healed_target_id = self._get_team_target(actions.doctor_heal_votes, ignored_voters=blocked_players)
         commissar_target_id = self._get_team_target(actions.commissar_check_votes, ignored_voters=blocked_players)
 
-        if commissar_target_id and self._connection_manager:
+        if commissar_target_id:
             commissars = [p for p in room.players if p.role == PlayerRole.COMMISSAR and p.is_alive]
             target_player = next((p for p in room.players if p.client_id == commissar_target_id), None)
             if commissars and target_player:
                 is_mafia = "Мафия" if target_player.role == PlayerRole.MAFIA else "Не мафия"
                 result_text = f"Результат вашей проверки: игрок {self._sanitize_for_llm(target_player.name)} - {is_mafia}."
-                message = WsMessage(type="personal_event", payload={"text": result_text})
                 for commissar in commissars:
-                    await self._connection_manager.send_personal_message(room.room_id, commissar.client_id, message.model_dump_json())
+                    await self._notifier.send_personal_event(room.room_id, commissar.client_id, result_text)
 
         event_data = None
         if mafia_target_id and mafia_target_id != healed_target_id:
@@ -313,8 +302,6 @@ class GameManager:
             event_data = {"type": "no_kill", "text": "Этой ночью в городе было тихо. Никто не был убит."}
         if event_data:
             room.last_events.append(event_data)
-            if self._connection_manager:
-                await self._connection_manager.broadcast(room.room_id, WsMessage(type="game_event", payload=event_data).model_dump_json())
 
     def _check_and_handle_win_condition(self, room: GameRoom) -> bool:
         if room.winner: return True
@@ -339,18 +326,25 @@ class GameManager:
     async def _handle_game_over(self, room: GameRoom):
         room.phase = GamePhase.GAME_OVER
         room.status = RoomStatus.FINISHED
-        await self._safe_broadcast(room.room_id)
+        await self._notifier.notify_room_update(room)
         logger.info(f"Room {room.room_id}: GAME OVER. Winner: {room.winner}")
         asyncio.create_task(self._delete_room_after_delay(room.room_id, 60))
     
+    async def _delete_room_after_delay(self, room_id: str, delay: int):
+        await asyncio.sleep(delay)
+        if room_id in self.active_rooms:
+            logger.info(f"Deleting room {room_id} after delay.")
+            await self._delete_room(room_id)
+
     def schedule_player_removal(self, room_id: str, client_id: str, delay: int = 10):
         asyncio.create_task(self._remove_player_after_delay(room_id, client_id, delay))
 
     async def _remove_player_after_delay(self, room_id: str, client_id: str, delay: int):
         await asyncio.sleep(delay)
-        if self._connection_manager and self._connection_manager.is_client_connected(room_id, client_id): return
         try:
             room = self.get_room(room_id)
+            if self._notifier._connection_manager.is_client_connected(room_id, client_id): return
+
             async with room.lock:
                 player_to_remove = next((p for p in room.players if p.client_id == client_id), None)
                 if not player_to_remove: return
@@ -368,22 +362,16 @@ class GameManager:
                     if room.host_id == client_id: room.host_id = room.players[0].client_id
                     logger.info(f"Player {player_to_remove.name} removed from lobby.")
                 
-                await self._safe_broadcast(room.room_id)
+                await self._notifier.notify_room_update(room)
         except (HTTPException, KeyError): pass
 
     async def _delete_room(self, room_id: str):
         if room_id in self.active_rooms:
             room = self.active_rooms.pop(room_id)
-            if room.game_loop_task and not room.game_loop_task.done(): room.game_loop_task.cancel()
-            logger.info(f"Room {room_id} and its tasks have been deleted.")
-            if self._connection_manager:
-                await self._connection_manager.close_and_remove_room_connections(room_id)
-
-    async def _delete_room_after_delay(self, room_id: str, delay: int):
-        await asyncio.sleep(delay)
-        if room_id in self.active_rooms:
-            logger.info(f"Deleting room {room_id} after delay.")
-            await self._delete_room(room_id)
+            if room.game_loop_task and not room.game_loop_task.done():
+                room.game_loop_task.cancel()
+            logger.info(f"Game room object {room_id} and its tasks have been deleted.")
+            await self._notifier._connection_manager.close_and_remove_room_connections(room_id)
 
     def set_roles_settings(self, room_id: str, client_id: str, new_roles: Roles) -> GameRoom:
         room = self.get_room(room_id)
@@ -406,10 +394,43 @@ class GameManager:
     async def process_websocket_message(self, room_id: str, client_id: str, data: Dict):
         message_type = data.get("type")
         payload = data.get("payload", {})
-        if message_type == "send_emote":
+        if message_type == "team_select_target":
+            await self._handle_team_activity(room_id, client_id, payload, is_confirmed=False)
+        elif message_type == "team_confirm_target":
+            await self._handle_team_activity(room_id, client_id, payload, is_confirmed=True)
+        elif message_type == "send_emote":
             await self._handle_send_emote(room_id, client_id, payload)
         else:
             logger.warning(f"Unknown WebSocket message type received from {client_id}: {message_type}")
+
+    async def _handle_team_activity(self, room_id: str, sender_client_id: str, payload: Dict, is_confirmed: bool):
+        try:
+            room = self.get_room(room_id)
+            sender = next((p for p in room.players if p.client_id == sender_client_id), None)
+            
+            if not sender or not sender.is_alive or not sender.role or sender.role == PlayerRole.CITIZEN:
+                return
+
+            teammates = [
+                p for p in room.players 
+                if p.is_alive and p.role == sender.role and p.client_id != sender_client_id
+            ]
+
+            if not teammates:
+                return
+
+            message_payload = {
+                "voter_name": sender.name,
+                "target_name": payload.get("target_name"),
+                "is_confirmed": is_confirmed,
+            }
+            for teammate in teammates:
+                await self._notifier.send_team_activity_update(
+                    room_id, teammate.client_id, message_payload
+                )
+
+        except HTTPException:
+            pass
 
     async def _handle_send_emote(self, room_id: str, sender_client_id: str, payload: Dict):
         try:
@@ -418,72 +439,11 @@ class GameManager:
             sender_player = next((p for p in room.players if p.client_id == sender_client_id), None)
             target_player = next((p for p in room.players if p.name == target_name and p.is_alive), None)
             if not sender_player or not target_player or sender_player == target_player: return
-            emote_message = WsMessage(type="receive_emote", payload={"from_player": sender_player.name})
-            if self._connection_manager:
-                await self._connection_manager.send_personal_message(room.room_id, target_player.client_id, emote_message.model_dump_json())
-        except HTTPException: pass
+            
+            emote_payload = {"from_player": sender_player.name}
 
-game_manager = GameManager()
-
-def create_public_room_view(room: GameRoom) -> GameRoomPublic:
-    public_players = []
-    for p in room.players:
-        acted = False
-        if room.phase == GamePhase.INTRODUCTION_NIGHT: acted = p.description is not None
-        elif room.phase in [GamePhase.INTRODUCTION_DAY, GamePhase.DAY]: acted = p.client_id in room.ready_votes
-        elif room.phase == GamePhase.JOKE_VOTING: acted = p.client_id in room.joke_votes
-        elif room.phase == GamePhase.VOTING: acted = p.client_id in room.lynch_votes
-        elif room.phase == GamePhase.NIGHT:
-            votes_map = {
-                PlayerRole.MAFIA: room.night_actions.mafia_kill_votes,
-                PlayerRole.DOCTOR: room.night_actions.doctor_heal_votes,
-                PlayerRole.COMMISSAR: room.night_actions.commissar_check_votes,
-                PlayerRole.WHORE: room.night_actions.whore_block_votes,
-            }
-            if p.role in votes_map:
-                vote_dict = votes_map[p.role]
-                if vote_dict: acted = p.client_id in vote_dict
-        
-        public_players.append(PlayerPublic(
-            name=p.name, is_alive=p.is_alive, is_host=(p.client_id == room.host_id), 
-            has_acted=acted, role=p.role if room.status == RoomStatus.FINISHED else None
-        ))
-        
-    return GameRoomPublic(
-        room_id=room.room_id, players=public_players, status=room.status,
-        roles=room.roles, environ=room.environ, phase=room.phase, day_number=room.day_number,
-        last_events=room.last_events, winner=room.winner
-    )
-
-def create_personalized_room_view(room: GameRoom, for_client_id: str) -> GameRoomPersonalizedResponse:
-    public_view = create_public_room_view(room)
-    is_host = (room.host_id == for_client_id)
-    current_player = next((p for p in room.players if p.client_id == for_client_id), None)
-    my_role = current_player.role if current_player else None
-    
-    teammates_list = []
-    if my_role and my_role != PlayerRole.CITIZEN:
-        for p in room.players:
-            if p.role == my_role and p.is_alive and p.client_id != for_client_id:
-                teammates_list.append(p.name)
-
-    team_votes_map = {}
-    if room.phase == GamePhase.NIGHT and my_role and my_role != PlayerRole.CITIZEN:
-        votes_attr_map = {
-            PlayerRole.MAFIA: room.night_actions.mafia_kill_votes,
-            PlayerRole.DOCTOR: room.night_actions.doctor_heal_votes,
-            PlayerRole.COMMISSAR: room.night_actions.commissar_check_votes,
-            PlayerRole.WHORE: room.night_actions.whore_block_votes,
-        }
-        current_team_votes = votes_attr_map.get(my_role)
-        if current_team_votes:
-            id_to_name_map = {p.client_id: p.name for p in room.players}
-            for voter_id, target_id in current_team_votes.items():
-                voter_name = id_to_name_map.get(voter_id)
-                target_name = id_to_name_map.get(target_id)
-                if voter_name and target_name: team_votes_map[voter_name] = target_name
-
-    return GameRoomPersonalizedResponse(
-        room_details=public_view, is_current_user_host=is_host, my_role=my_role,
-        winner=room.winner, teammates=teammates_list, team_votes=team_votes_map 
-    )
+            await self._notifier.send_emote_notification(
+                room.room_id, target_player.client_id, emote_payload
+            )
+        except HTTPException:
+            pass

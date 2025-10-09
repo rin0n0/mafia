@@ -39,5 +39,3 @@ class ConnectionManager:
         if self.is_client_connected(room_id, client_id):
             connection, queue = self.active_connections[room_id][client_id]
             await queue.put(message)
-
-connection_manager = ConnectionManager()

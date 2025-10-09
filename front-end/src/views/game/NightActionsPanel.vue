@@ -92,6 +92,7 @@ const buttonText = computed(() => {
 const submitAction = () => {
     if (!props.selectedPlayerName) return;
     gameStore.performAction(actionConfig.value.actionType, { target_name: props.selectedPlayerName });
+    gameStore.confirmTeamTarget(props.selectedPlayerName);
 };
 
 </script>

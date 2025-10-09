@@ -8,13 +8,9 @@ import type {
   GameRoomPublic,
   GameRoomPersonalizedResponse,
   Roles,
-  WsMessage,
   PersonalEventPayload,
   EmotePayload,
-  JokeVotePayload,
-  VoteResultsPayload,
-  GameEvent,
-  GameEventPayload,
+  TeamActivity,
 } from "@/types/game";
 
 function updateFullState(store: GameState, data: GameRoomPersonalizedResponse) {
@@ -35,11 +31,13 @@ interface GameState {
   socket: WebSocket | null;
   isConnected: boolean;
   isLoading: boolean;
+  teamActivity: TeamActivity;
   error: string | null;
   teammates: string[];
   teamVotes: Map<string, string>;
   specialAnnouncement: string | null;
 }
+
 export const useGameStore = defineStore("game", {
   state: (): GameState => ({
     room: null,
@@ -49,6 +47,7 @@ export const useGameStore = defineStore("game", {
     isConnected: false,
     isLoading: false,
     error: null,
+    teamActivity: {},
     teammates: [],
     teamVotes: new Map(),
     specialAnnouncement: null,
@@ -264,7 +263,6 @@ export const useGameStore = defineStore("game", {
     async performAction(action_type: string, payload: object) {
       const userStore = useUserStore();
       if (!this.room || !userStore.clientId) return;
-
       this.isLoading = true;
       try {
         await axios.post(
@@ -288,6 +286,26 @@ export const useGameStore = defineStore("game", {
         this.socket.send(JSON.stringify(message));
       } else {
         console.error("WebSocket is not connected. Cannot send emote.");
+      }
+    },
+
+    selectTeamTarget(targetName: string | null) {
+      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+        const message = {
+          type: "team_select_target",
+          payload: { target_name: targetName },
+        };
+        this.socket.send(JSON.stringify(message));
+      }
+    },
+
+    confirmTeamTarget(targetName: string) {
+      if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+        const message = {
+          type: "team_confirm_target",
+          payload: { target_name: targetName },
+        };
+        this.socket.send(JSON.stringify(message));
       }
     },
 
@@ -327,6 +345,12 @@ export const useGameStore = defineStore("game", {
         }
         switch (message.type) {
           case "personal_state_update": {
+            if (
+              (message.payload as GameRoomPersonalizedResponse).room_details
+                .phase !== "night"
+            ) {
+              this.teamActivity = {};
+            }
             updateFullState(
               this,
               message.payload as GameRoomPersonalizedResponse
@@ -338,6 +362,7 @@ export const useGameStore = defineStore("game", {
             this.room = publicState;
             if (publicState.phase !== "night") {
               this.teamVotes.clear();
+              this.teamActivity = {};
             }
             break;
           }
@@ -353,6 +378,25 @@ export const useGameStore = defineStore("game", {
             uiStore.addNotification(
               `Игрок ${payload.from_player} таинственно вам подмигивает...`
             );
+            break;
+          }
+          case "team_activity_update": {
+            const { voter_name, target_name, is_confirmed } = message.payload;
+            Object.keys(this.teamActivity).forEach((target) => {
+              this.teamActivity[target] =
+                this.teamActivity[target]?.filter(
+                  (v) => v.voterName !== voter_name
+                ) || [];
+            });
+            if (target_name) {
+              if (!this.teamActivity[target_name]) {
+                this.teamActivity[target_name] = [];
+              }
+              this.teamActivity[target_name].push({
+                voterName: voter_name,
+                isConfirmed: is_confirmed,
+              });
+            }
             break;
           }
         }

@@ -19,6 +19,12 @@
         <div v-if="player.is_alive && !isMyCard" class="emote-wrapper">
             <button @click.stop="sendEmote" class="emote-btn" title="Подмигнуть">👁️</button>
         </div>
+        <div v-if="indicators.length" class="team-indicators">
+            <div v-for="indicator in indicators" :key="indicator.voterName" class="indicator-dot"
+                :class="{ 'is-confirmed': indicator.isConfirmed }" :title="`Выбор игрока: ${indicator.voterName}`">
+                {{ indicator.voterName.charAt(0).toUpperCase() }}
+            </div>
+        </div>
 
         <div v-if="!player.is_alive" class="dead-overlay">
             <span>ВЫБЫЛ</span>
@@ -38,6 +44,11 @@ const userStore = useUserStore();
 const isMyCard = computed(() => props.player.name === userStore.playerName);
 const isTeamTarget = computed(() => gameStore.getVotersForPlayer(props.player.name).length > 0);
 const sendEmote = () => gameStore.sendEmote(props.player.name);
+
+const indicators = computed(() => {
+    const allIndicators = gameStore.teamActivity[props.player.name] || [];
+    return allIndicators.filter(indicator => indicator.voterName !== userStore.playerName);
+});
 </script>
 
 <style scoped>
@@ -80,6 +91,11 @@ const sendEmote = () => gameStore.sendEmote(props.player.name);
 
 .player-card.is-me .card-border {
     border-color: rgba(239, 233, 227, 0.4);
+}
+
+.player-card.is-me.is-selected .card-border {
+    border-color: var(--primary-brand-color);
+    border-width: 3px;
 }
 
 .acted-indicator {
@@ -167,5 +183,32 @@ const sendEmote = () => gameStore.sendEmote(props.player.name);
 .emote-btn:hover {
     opacity: 1;
     transform: scale(1.2);
+}
+
+.team-indicators {
+    position: absolute;
+    bottom: 8px;
+    left: 8px;
+    display: flex;
+    gap: 4px;
+}
+
+.indicator-dot {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background-color: #808080;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.8rem;
+    border: 2px solid rgba(0, 0, 0, 0.5);
+    transition: background-color 0.3s ease;
+}
+
+.indicator-dot.is-confirmed {
+    background-color: var(--primary-brand-color);
 }
 </style>

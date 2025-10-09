@@ -152,7 +152,11 @@ const copyRoomId = async () => {
 };
 
 const handlePlayerSelect = (playerName: string) => {
-  selectedPlayerName.value = selectedPlayerName.value === playerName ? null : playerName;
+  const newSelectedPlayer = selectedPlayerName.value === playerName ? null : playerName;
+  selectedPlayerName.value = newSelectedPlayer;
+  if (gameStore.isNightActionPhase) {
+    gameStore.selectTeamTarget(newSelectedPlayer);
+  }
   if (gameStore.myPlayerHasActed) {
     setTimeout(() => { selectedPlayerName.value = null; }, 300);
   }

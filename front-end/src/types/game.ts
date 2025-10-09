@@ -45,6 +45,13 @@ export interface Roles {
   whore: number;
 }
 
+export interface TeamActivity {
+  [targetName: string]: {
+    voterName: string;
+    isConfirmed: boolean;
+  }[];
+}
+
 export interface JokeVotePayload {
   question: string;
 }
