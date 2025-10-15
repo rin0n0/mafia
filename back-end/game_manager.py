@@ -4,6 +4,7 @@ import random
 import string
 from collections import Counter
 from typing import Dict, List, Optional
+import time
 
 from fastapi import HTTPException
 
@@ -20,6 +21,7 @@ NIGHT_DURATION = 120.0
 VOTING_DURATION = 90.0
 RESULTS_DISPLAY_PAUSE = 8.0
 EVENT_HISTORY_LIMIT = 15
+
 ACTIVE_NIGHT_ROLES = {PlayerRole.MAFIA, PlayerRole.DOCTOR, PlayerRole.COMMISSAR, PlayerRole.WHORE}
 
 PHASE_TRANSITIONS: Dict[GamePhase, GamePhase] = {
@@ -29,6 +31,15 @@ PHASE_TRANSITIONS: Dict[GamePhase, GamePhase] = {
     GamePhase.NIGHT: GamePhase.DAY,
     GamePhase.DAY: GamePhase.VOTING,
     GamePhase.VOTING: GamePhase.NIGHT,
+}
+
+PHASE_DURATIONS: Dict[GamePhase, float] = {
+    GamePhase.INTRODUCTION_NIGHT: INTRO_NIGHT_DURATION,
+    GamePhase.INTRODUCTION_DAY: DAY_DISCUSSION_DURATION,
+    GamePhase.JOKE_VOTING: JOKE_VOTING_DURATION,
+    GamePhase.NIGHT: NIGHT_DURATION,
+    GamePhase.DAY: DAY_DISCUSSION_DURATION,
+    GamePhase.VOTING: VOTING_DURATION,
 }
 
 class GameManager:
@@ -115,8 +126,10 @@ class GameManager:
             GamePhase.DAY: DAY_DISCUSSION_DURATION,
             GamePhase.VOTING: VOTING_DURATION,
         }
-        duration = phase_durations.get(phase)
-        if not duration: raise ValueError(f"No duration for phase: {phase}")
+        duration = room.phase_duration
+        if not duration:
+            logger.warning(f"No duration set for phase {phase}, game might hang.")
+            return
 
         room.phase_event = asyncio.Event()
         try:
@@ -142,6 +155,13 @@ class GameManager:
             next_phase = PHASE_TRANSITIONS.get(current_phase)
             if not next_phase: raise ValueError(f"No transition from phase: {current_phase}")
             
+            duration = PHASE_DURATIONS.get(next_phase)
+            if duration:
+                room.phase_start_time = time.time()
+                room.phase_duration = duration
+            else:
+                room.phase_start_time = None
+                room.phase_duration = None
             room.last_events.clear()
             
             if next_phase == GamePhase.DAY: room.day_number += 1

@@ -2,6 +2,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 from enum import Enum
 import asyncio
+import time
 
 class RoomStatus(str, Enum):
     WAITING = "waiting"
@@ -67,6 +68,9 @@ class GameRoom(BaseModel):
     phase: Optional[GamePhase] = None
     day_number: int = 0
     
+    phase_start_time: Optional[float] = Field(default=None, exclude=True)
+    phase_duration: Optional[float] = Field(default=None, exclude=True)
+
     ready_votes: Dict[str, bool] = Field(default_factory=dict)
     joke_votes: Dict[str, str] = Field(default_factory=dict)
     lynch_votes: Dict[str, str] = Field(default_factory=dict)
@@ -99,6 +103,8 @@ class GameRoomPublic(BaseModel):
     day_number: int
     last_events: List[Dict[str, Any]] = Field(default_factory=list)
     winner: Optional[Winner] = None
+    phase_time_left: Optional[float] = None
+    phase_duration: Optional[float] = None
 
 class CreateRoomRequest(BaseModel):
     host_name: str

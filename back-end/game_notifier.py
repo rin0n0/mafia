@@ -49,22 +49,27 @@ class GameNotifier:
         public_players = []
         for p in room.players:
             acted = False
-            # Ночью публичный has_acted всегда false
             if room.phase != GamePhase.NIGHT:
                 if room.phase == GamePhase.INTRODUCTION_NIGHT: acted = p.description is not None
                 elif room.phase in [GamePhase.INTRODUCTION_DAY, GamePhase.DAY]: acted = p.client_id in room.ready_votes
                 elif room.phase == GamePhase.JOKE_VOTING: acted = p.client_id in room.joke_votes
                 elif room.phase == GamePhase.VOTING: acted = p.client_id in room.lynch_votes
-            
+
             public_players.append(PlayerPublic(
                 name=p.name, is_alive=p.is_alive, is_host=(p.client_id == room.host_id), 
                 has_acted=acted, role=p.role if room.status == RoomStatus.FINISHED else None
             ))
+
+        phase_time_left: Optional[float] = None
+        if room.phase_start_time and room.phase_duration:
+            elapsed = time.time() - room.phase_start_time
+            remaining = room.phase_duration - elapsed
+            phase_time_left = max(0, remaining)
             
         return GameRoomPublic(
             room_id=room.room_id, players=public_players, status=room.status,
             roles=room.roles, environ=room.environ, phase=room.phase, day_number=room.day_number,
-            last_events=room.last_events, winner=room.winner
+            last_events=room.last_events, winner=room.winner, phase_time_left=phase_time_left, phase_duration=room.phase_duration, 
         )
 
     def _create_personalized_room_view(self, room: GameRoom, for_client_id: str) -> GameRoomPersonalizedResponse:
@@ -72,7 +77,6 @@ class GameNotifier:
         current_player = next((p for p in room.players if p.client_id == for_client_id), None)
         
         if current_player:
-            # Вычисляем РЕАЛЬНЫЙ has_acted для этого игрока
             real_has_acted = False
             phase = room.phase
             if phase == GamePhase.NIGHT:
@@ -86,17 +90,14 @@ class GameNotifier:
                     vote_dict = votes_map[current_player.role]
                     if vote_dict:
                         real_has_acted = current_player.client_id in vote_dict
-            else: # Для всех остальных фаз берем из public_view
+            else: 
                 player_in_public_view = next((pv for pv in public_view.players if pv.name == current_player.name), None)
                 if player_in_public_view:
                     real_has_acted = player_in_public_view.has_acted
-
-            # Обновляем has_acted в "публичной" части персонализированного ответа
             my_public_player_view = next((p for p in public_view.players if p.name == current_player.name), None)
             if my_public_player_view:
                 my_public_player_view.has_acted = real_has_acted
 
-        # ... (остальная логика для teammates, team_votes и т.д. без изменений)
         is_host = (room.host_id == for_client_id)
         my_role = current_player.role if current_player else None
         
@@ -121,6 +122,7 @@ class GameNotifier:
                     voter_name = id_to_name_map.get(voter_id)
                     target_name = id_to_name_map.get(target_id)
                     if voter_name and target_name: team_votes_map[voter_name] = target_name
+                    
 
         return GameRoomPersonalizedResponse(
             room_details=public_view, is_current_user_host=is_host, my_role=my_role,

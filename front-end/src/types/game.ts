@@ -22,6 +22,8 @@ export interface GameRoomPublic {
   roles: Roles;
   environ: string | null;
   last_events: GameEvent[];
+  phase_time_left: number | null;
+  phase_duration: number | null;
 }
 
 export interface EmotePayload {

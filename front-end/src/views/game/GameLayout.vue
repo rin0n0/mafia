@@ -1,14 +1,12 @@
 <template>
     <div class="game-layout">
         <MyRolePanel />
+        <TimerBar v-if="gameStore.room?.phase_time_left && gameStore.room.phase_duration"
+            :initial-time-left="gameStore.room.phase_time_left" :total-duration="gameStore.room.phase_duration" />
         <NightActionsPanel v-if="gameStore.isNightActionPhase" :selected-player-name="selectedPlayerName"
             @player-select="$emit('playerSelect', $event)" />
         <div v-else class="day-view">
             <HostDisplay :message="cleanedHostMessage" />
-            <div v-if="isDiscussionPhase" class="timer-bar">
-                <span>Обсуждение: {{ formattedTimeLeft }}</span>
-                <div class="timer-bar-inner" :style="{ width: timerProgress + '%' }"></div>
-            </div>
             <PlayerGrid>
                 <PlayerCard v-for="player in gameStore.room?.players" :key="player.name" :player="player"
                     :is-selectable="isPlayerSelectable(player)" :is-selected="player.name === selectedPlayerName"
@@ -29,7 +27,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onUnmounted } from 'vue';
+import { computed } from 'vue';
 import { useGameStore } from '@/stores/gameStore';
 import type { PlayerPublic } from '@/types/game';
 
@@ -38,14 +36,12 @@ import NightActionsPanel from './NightActionsPanel.vue';
 import HostDisplay from './HostDisplay.vue';
 import PlayerGrid from './PlayerGrid.vue';
 import PlayerCard from './PlayerCard.vue';
+import TimerBar from './TimerBar.vue';
 
 const props = defineProps<{ selectedPlayerName: string | null; }>();
 defineEmits(['playerSelect']);
 
 const gameStore = useGameStore();
-const DISCUSSION_TIME = 180;
-const timeLeft = ref(DISCUSSION_TIME);
-let timerInterval: number | null = null;
 
 const isDiscussionPhase = computed(() => {
     const phase = gameStore.room?.phase;
@@ -64,11 +60,13 @@ const hostMessage = computed(() => {
         case 'introduction_day':
             return "Первый день. Познакомьтесь друг с другом и обсудите, кто кажется вам подозрительным.";
         case 'day':
-            return `День ${day}. Обсудите события прошедшей ночи и решите, кто следующий кандидат на выбывание.`;
+            return `День ${day}. Обсудите события прошедшей ночи.`;
         case 'joke_voting':
-            return "Шуточное голосование! Выберите самого подозрительного игрока. Это ни на что не повлияет... пока что.";
+            return "Шуточное голосование! Выберите самого подозрительного игрока.";
         case 'voting':
             return "Голосование за казнь! Выберите игрока, которого вы считаете мафией.";
+        case 'night':
+            return `Ночь ${day}. Активные роли делают свой ход...`;
         default:
             return 'Ожидание следующей фазы...';
     }
@@ -94,44 +92,11 @@ const submitVote = () => {
     gameStore.performAction('vote', { target_name: props.selectedPlayerName });
 };
 
-const startTimer = () => {
-    stopTimer();
-    timeLeft.value = DISCUSSION_TIME;
-    timerInterval = window.setInterval(() => {
-        if (timeLeft.value > 0) {
-            timeLeft.value--;
-        } else {
-            stopTimer();
-        }
-    }, 1000);
-};
-const stopTimer = () => {
-    if (timerInterval) clearInterval(timerInterval);
-};
 const cleanedHostMessage = computed(() => {
     const message = hostMessage.value;
     if (!message) return '';
     return message.replace(/{{{|}}}/g, '');
 });
-
-watch(isDiscussionPhase, (isDiscussion) => {
-    if (isDiscussion) {
-        startTimer();
-    } else {
-        stopTimer();
-    }
-}, { immediate: true });
-
-onUnmounted(stopTimer);
-
-const formattedTimeLeft = computed(() => {
-    const minutes = Math.floor(timeLeft.value / 60);
-    const seconds = timeLeft.value % 60;
-    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
-});
-
-const timerProgress = computed(() => (timeLeft.value / DISCUSSION_TIME) * 100);
-
 </script>
 
 <style scoped>
