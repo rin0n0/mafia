@@ -1,4 +1,3 @@
-# src/connection_manager.py
 from fastapi import WebSocket
 import asyncio
 from typing import Dict, List
@@ -39,3 +38,15 @@ class ConnectionManager:
         if self.is_client_connected(room_id, client_id):
             connection, queue = self.active_connections[room_id][client_id]
             await queue.put(message)
+    async def close_and_remove_room_connections(self, room_id: str):
+        if room_id in self.active_connections:
+            connections_to_close = list(self.active_connections[room_id].values())
+            
+            print(f"Closing all connections for room {room_id}...")
+            for connection, queue in connections_to_close:
+                try:
+                    await connection.close(code=1000)
+                except Exception as e:
+                    print(f"Error closing a websocket for room {room_id}: {e}")
+            del self.active_connections[room_id]
+            print(f"All connections for room {room_id} have been removed.")

@@ -21,7 +21,8 @@
         </div>
         <div v-if="indicators.length" class="team-indicators">
             <div v-for="indicator in indicators" :key="indicator.voterName" class="indicator-dot"
-                :class="{ 'is-confirmed': indicator.isConfirmed }" :title="`Выбор игрока: ${indicator.voterName}`">
+                :class="{ 'is-confirmed': indicator.isConfirmed }" @mouseenter="showDotTooltip($event, indicator)"
+                @mouseleave="hideTooltip" @click.stop="showDotTooltip($event, indicator)">
                 {{ indicator.voterName.charAt(0).toUpperCase() }}
             </div>
         </div>
@@ -29,14 +30,40 @@
         <div v-if="!player.is_alive" class="dead-overlay">
             <span>ВЫБЫЛ</span>
         </div>
+        <Tooltip :show="showTooltip" :text="tooltipText" :target-element="tooltipTarget" />
     </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useGameStore } from '@/stores/gameStore';
 import { useUserStore } from '@/stores/userStore';
 import type { PlayerPublic } from '@/types/game';
+import Tooltip from '@/views/ui/ToolTip.vue';
+
+interface Indicator {
+    voterName: string;
+    isConfirmed: boolean;
+}
+
+const showTooltip = ref(false);
+const tooltipText = ref('');
+const tooltipTarget = ref<HTMLElement | null>(null);
+let hideTooltipTimeout: number;
+
+const showDotTooltip = (event: MouseEvent, indicator: Indicator) => {
+    clearTimeout(hideTooltipTimeout);
+    tooltipTarget.value = event.currentTarget as HTMLElement;
+    const actionText = indicator.isConfirmed ? 'выбрал' : 'хочет выбрать';
+    tooltipText.value = `Игрок ${indicator.voterName} ${actionText} эту цель`;
+    showTooltip.value = true;
+};
+
+const hideTooltip = () => {
+    hideTooltipTimeout = window.setTimeout(() => {
+        showTooltip.value = false;
+    }, 100);
+};
 
 const props = defineProps<{ player: PlayerPublic; isSelectable?: boolean; isSelected?: boolean; }>();
 const gameStore = useGameStore();
@@ -60,13 +87,14 @@ const indicators = computed(() => {
     position: relative;
     overflow: hidden;
     cursor: default;
-    transition: transform display 0.2s ease, box-shadow 0.2s ease;
+    transition: box-shadow 0.2s ease;
     aspect-ratio: 1 / 1.2;
     display: flex;
     flex-direction: column;
     justify-content: center;
     align-items: center;
     border: 2px solid transparent;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .card-border {
@@ -74,19 +102,16 @@ const indicators = computed(() => {
     inset: 0;
     border-radius: 12px;
     border: 2px solid var(--input-border-color);
-    transition: border-color 0.2s ease;
+    transition: border-color 0.2s ease, border-width 0.2s ease;
 }
 
 .player-card.is-selectable:not(.is-dead) {
     cursor: pointer;
 }
 
-.player-card.is-selectable:not(.is-dead):hover .card-border {
-    border-color: var(--input-focus-border-color);
-}
-
 .player-card.is-selected .card-border {
     border-color: var(--primary-brand-color);
+    border-width: 3px;
 }
 
 .player-card.is-me .card-border {
@@ -95,7 +120,6 @@ const indicators = computed(() => {
 
 .player-card.is-me.is-selected .card-border {
     border-color: var(--primary-brand-color);
-    border-width: 3px;
 }
 
 .acted-indicator {
@@ -129,18 +153,6 @@ const indicators = computed(() => {
     width: 100%;
 }
 
-.card-indicators {
-    position: absolute;
-    bottom: 8px;
-    left: 8px;
-    display: flex;
-    gap: 0.5rem;
-}
-
-.indicator-icon {
-    font-size: 1.2rem;
-}
-
 .player-card.is-dead {
     opacity: 0.6;
     filter: grayscale(80%);
@@ -171,18 +183,8 @@ const indicators = computed(() => {
     border: none;
     font-size: 1.5rem;
     cursor: pointer;
-    opacity: 0;
-    transition: opacity 0.2s ease;
-}
-
-.player-card:hover .emote-btn {
     opacity: 0.6;
     transition: all 0.2s ease;
-}
-
-.emote-btn:hover {
-    opacity: 1;
-    transform: scale(1.2);
 }
 
 .team-indicators {
@@ -206,9 +208,42 @@ const indicators = computed(() => {
     font-size: 0.8rem;
     border: 2px solid rgba(0, 0, 0, 0.5);
     transition: background-color 0.3s ease;
+    cursor: pointer;
 }
 
 .indicator-dot.is-confirmed {
     background-color: var(--primary-brand-color);
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .player-card {
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .player-card.is-selectable:not(.is-dead):hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .player-card.is-selectable:not(.is-dead):hover .card-border {
+        border-color: var(--input-focus-border-color);
+    }
+
+    .emote-btn {
+        opacity: 0;
+    }
+
+    .player-card:hover .emote-btn {
+        opacity: 0.6;
+    }
+
+    .emote-btn:hover {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+
+    .indicator-dot {
+        cursor: help;
+    }
 }
 </style>

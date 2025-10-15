@@ -90,9 +90,9 @@ const phaseMap: Record<string, string> = {
 const roleSubtitleMap: Record<string, string> = {
   mafia: "Ваша цель — истребить всех мирных жителей.",
   citizen: "Ваша цель — найти и казнить всю мафию.",
-  doctor: "Каждую ночь вы можете кого-то одного от смерти. Помогайте мирным жителям.",
+  doctor: "Каждую ночь вы можете спасти кого-то от смерти. Помогайте мирным жителям.",
   comissar: "Каждую ночь вы можете проверить одного игрока. Истрибите мафию.",
-  whore: "Каждую ночь вы можете лишить одного игрока голоса и действия. Помогайте мафии."
+  whore: "Каждую ночь вы можете лишить одного игрока голоса и действия"
 };
 
 watch([() => gameStore.room?.status, () => gameStore.room?.phase], ([newStatus, newPhase], [oldStatus, oldPhase]) => {
@@ -233,18 +233,15 @@ const handleUpdateEnvironment = (newEnvironment: string | null) => {
   opacity: 0;
 }
 
-/* --- ИСПРАВЛЕНИЕ ЗДЕСЬ --- */
-/* Когда наступает ночь, мы скрываем дневной фон... */
+
 .room-view.is-night::before {
   opacity: 0;
 }
 
-/* ...и показываем ночной фон. */
 .room-view.is-night::after {
   opacity: 1;
 }
 
-/* --- КОНЕЦ ИСПРАВЛЕНИЯ --- */
 
 
 .room-content {
