@@ -118,15 +118,7 @@ class GameManager:
     async def _run_phase_logic(self, room: GameRoom):
         phase = room.phase
         logger.info(f"Room {room.room_id}: Starting phase {phase} (Day {room.day_number})")
-        phase_durations = {
-            GamePhase.INTRODUCTION_NIGHT: INTRO_NIGHT_DURATION,
-            GamePhase.INTRODUCTION_DAY: DAY_DISCUSSION_DURATION,
-            GamePhase.JOKE_VOTING: JOKE_VOTING_DURATION,
-            GamePhase.NIGHT: NIGHT_DURATION,
-            GamePhase.DAY: DAY_DISCUSSION_DURATION,
-            GamePhase.VOTING: VOTING_DURATION,
-        }
-        duration = room.phase_duration
+        duration = PHASE_DURATIONS.get(phase)
         if not duration:
             logger.warning(f"No duration set for phase {phase}, game might hang.")
             return

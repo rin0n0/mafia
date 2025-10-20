@@ -10,7 +10,7 @@ import type {
   Roles,
   PersonalEventPayload,
   EmotePayload,
-  TeamActivity,
+  TeamActivity
 } from "@/types/game";
 
 function updateFullState(store: GameState, data: GameRoomPersonalizedResponse) {
