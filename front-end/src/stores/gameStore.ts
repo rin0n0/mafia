@@ -3,6 +3,7 @@ import axios from "axios";
 import { useUserStore } from "./userStore";
 import router from "@/router";
 import { useUiStore } from "./uiStore";
+import { nextTick } from "vue";
 
 import type {
   GameRoomPublic,
@@ -10,7 +11,7 @@ import type {
   Roles,
   PersonalEventPayload,
   EmotePayload,
-  TeamActivity
+  TeamActivity,
 } from "@/types/game";
 
 function updateFullState(store: GameState, data: GameRoomPersonalizedResponse) {
@@ -123,6 +124,7 @@ export const useGameStore = defineStore("game", {
           }
         );
         updateFullState(this, response.data);
+        await nextTick();
         router.push(`/room/${this.room!.room_id}`);
       } catch (err: any) {
         this.error =
@@ -152,6 +154,7 @@ export const useGameStore = defineStore("game", {
           }
         );
         updateFullState(this, response.data);
+        await nextTick();
         router.push(`/room/${this.room!.room_id}`);
       } catch (err: any) {
         this.error = err.response?.data?.detail || "Ошибка при входе в комнату";
@@ -243,14 +246,21 @@ export const useGameStore = defineStore("game", {
       this.error = null;
 
       try {
-        await axios.post(
+        const response = await axios.post<GameRoomPersonalizedResponse>(
           `${API_BASE}/rooms/${this.room.room_id}/start`,
           {},
           {
-            headers: {
-              "X-Client-ID": userStore.clientId,
-            },
+            headers: { "X-Client-ID": userStore.clientId },
           }
+        );
+        console.log(
+          "[DEBUG] startGame: Received HTTP response. Data:",
+          JSON.parse(JSON.stringify(response.data))
+        );
+        updateFullState(this, response.data);
+        console.log(
+          "[DEBUG] startGame: State updated. Current active_narration:",
+          JSON.parse(JSON.stringify(this.room?.active_narration))
         );
       } catch (err: any) {
         this.error = err.response?.data?.detail || "Ошибка при старте игры";
@@ -259,7 +269,6 @@ export const useGameStore = defineStore("game", {
         this.isLoading = false;
       }
     },
-
     async performAction(action_type: string, payload: object) {
       const userStore = useUserStore();
       if (!this.room || !userStore.clientId) return;
@@ -335,6 +344,10 @@ export const useGameStore = defineStore("game", {
 
       this.socket.onmessage = (event) => {
         let message = JSON.parse(event.data);
+        console.log(
+          `[DEBUG] WebSocket: Received message of type "${message.type}". Payload:`,
+          JSON.parse(JSON.stringify(message.payload))
+        );
         if (typeof message === "string") {
           try {
             message = JSON.parse(message);

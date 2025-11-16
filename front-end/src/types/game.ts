@@ -8,8 +8,10 @@ export interface PlayerPublic {
 
 export interface GameEvent {
   type: string;
-  text: string;
-  killed_player_name?: string;
+  title?: string;
+  summary?: string;
+  narration?: string;
+  text?: string;
 }
 
 export interface GameRoomPublic {
@@ -24,6 +26,7 @@ export interface GameRoomPublic {
   last_events: GameEvent[];
   phase_time_left: number | null;
   phase_duration: number | null;
+  active_narration: GameEvent | null;
 }
 
 export interface EmotePayload {

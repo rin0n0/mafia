@@ -27,7 +27,7 @@ import SettingsPanel from '@/views/wait/SettingsPanel.vue';
 const props = defineProps({
     players: { type: Array as PropType<PlayerPublic[]>, required: true },
     roles: { type: Object as PropType<Roles>, required: true },
-    initialEnvironment: { type: String as PropType<string | null>, required: true },
+    initialEnvironment: { type: [String, null] as PropType<string | null>, required: true },
     isHost: { type: Boolean, required: true },
     playerCount: { type: Number, required: true },
     isLoading: { type: Boolean, required: true },

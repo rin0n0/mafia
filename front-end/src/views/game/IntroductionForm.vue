@@ -1,13 +1,19 @@
 <template>
     <div class="intro-form">
-        <h3 class="form-title">Расскажите о своем персонаже</h3>
-        <p class="form-subtitle">
-            Это описание увидит ведущий. Оно поможет сделать игру атмосфернее.
-        </p>
+        <!-- Блок с AI-приветствием -->
+        <div v-if="welcomeNarration" class="ai-welcome">
+            <h3 class="form-title">{{ welcomeNarration.title }}</h3>
+            <p class="form-subtitle" v-html="welcomeNarration.narration"></p>
+        </div>
+
+        <div class="action-prompt">
+            <h3 class="form-title-secondary">Теперь ваша очередь</h3>
+            <p class="form-subtitle">Расскажите о своем персонаже, чтобы ведущий мог вплести вашу историю в игру.</p>
+        </div>
 
         <div class="theme-info">
-            <p v-if="gameStore.room?.environ" wrap="soft">
-                Тема игры: <br /><strong>"{{ gameStore.room.environ }}"</strong>
+            <p v-if="gameStore.room?.environ">
+                Тема игры: <strong>"{{ gameStore.room.environ }}"</strong>
             </p>
             <p v-else>
                 Тема игры не задана. Можете придумать любую историю.
@@ -25,19 +31,25 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useGameStore } from '@/stores/gameStore';
 
 const gameStore = useGameStore();
-
 const description = ref('');
 
-const emit = defineEmits<{
-    (e: 'submitDescription', description: string): void
-}>();
-const submit = () => {
-    emit('submitDescription', description.value);
-};
+const welcomeNarration = computed(() => {
+    const narration = gameStore.room?.active_narration;
+    if (narration && narration.type === 'game_start_narration') {
+        return {
+            title: narration.title || 'Начало игры',
+            narration: narration.narration?.replace(/{{{(.*?)}}}/g, '<strong>$1</strong>') || ''
+        }
+    }
+    return null;
+});
+
+const emit = defineEmits<{ (e: 'submitDescription', description: string): void }>();
+const submit = () => { emit('submitDescription', description.value); };
 </script>
 
 <style scoped>
@@ -57,6 +69,34 @@ const submit = () => {
     color: var(--primary-text-color);
     text-align: center;
     font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0 0 0.5rem 0;
+}
+
+.ai-welcome {
+    margin-bottom: 2rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--input-border-color);
+}
+
+.ai-welcome .form-title {
+    font-size: 1.8rem;
+    /* Делаем заголовок от AI крупнее */
+}
+
+.ai-welcome .form-subtitle {
+    font-size: 1.1rem;
+    line-height: 1.6;
+}
+
+.action-prompt {
+    margin-bottom: 1rem;
+}
+
+.form-title-secondary {
+    color: var(--primary-text-color);
+    text-align: center;
+    font-size: 1.3rem;
     font-weight: 700;
     margin: 0 0 0.5rem 0;
 }

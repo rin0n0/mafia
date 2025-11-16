@@ -67,14 +67,15 @@ class GameRoom(BaseModel):
     environ: Optional[str] = None
     phase: Optional[GamePhase] = None
     day_number: int = 0
-    
+    pre_generated_narration: Optional[Dict] = Field(default=None, exclude=True)
+    pre_generation_task: Optional[asyncio.Task] = Field(default=None, exclude=True)
     phase_start_time: Optional[float] = Field(default=None, exclude=True)
     phase_duration: Optional[float] = Field(default=None, exclude=True)
 
     ready_votes: Dict[str, bool] = Field(default_factory=dict)
     joke_votes: Dict[str, str] = Field(default_factory=dict)
     lynch_votes: Dict[str, str] = Field(default_factory=dict)
-    
+    active_narration: Optional[Dict] = None
     night_actions: NightActions = Field(default_factory=NightActions)
     last_events: List[Dict[str, Any]] = Field(default_factory=list)
     winner: Optional[Winner] = None
@@ -105,6 +106,7 @@ class GameRoomPublic(BaseModel):
     winner: Optional[Winner] = None
     phase_time_left: Optional[float] = None
     phase_duration: Optional[float] = None
+    active_narration: Optional[Dict] = None
 
 class CreateRoomRequest(BaseModel):
     host_name: str
@@ -135,3 +137,13 @@ class GameRoomPersonalizedResponse(BaseModel):
     winner: Optional[Winner] = None
     teammates: List[str] = Field(default_factory=list)
     team_votes: Dict[str, str] = Field(default_factory=dict)
+
+class AINarration(BaseModel):
+    title: str = Field(description="Креативный, атмосферный заголовок события.")
+    summary: str = Field(description="Сухой, фактический итог события в одном предложении.")
+    narration: str = Field(description="Полное, креативное и атмосферное описание события.")
+
+class AIContext(BaseModel):
+    setting: str
+    player_descriptions: Dict[str, str]
+    history: List[str]

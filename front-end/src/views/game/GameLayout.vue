@@ -6,7 +6,7 @@
         <NightActionsPanel v-if="gameStore.isNightActionPhase" :selected-player-name="selectedPlayerName"
             @player-select="$emit('playerSelect', $event)" />
         <div v-else class="day-view">
-            <HostDisplay :message="cleanedHostMessage" />
+            <HostDisplay v-if="!hasNarrationEvents" :message="hostMessage" />
             <PlayerGrid>
                 <PlayerCard v-for="player in gameStore.room?.players" :key="player.name" :player="player"
                     :is-selectable="isPlayerSelectable(player)" :is-selected="player.name === selectedPlayerName"
@@ -42,6 +42,10 @@ const props = defineProps<{ selectedPlayerName: string | null; }>();
 defineEmits(['playerSelect']);
 
 const gameStore = useGameStore();
+
+const hasNarrationEvents = computed(() => {
+    return (gameStore.room?.last_events ?? []).length > 0;
+});
 
 const isDiscussionPhase = computed(() => {
     const phase = gameStore.room?.phase;

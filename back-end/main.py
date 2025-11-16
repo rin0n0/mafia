@@ -88,12 +88,13 @@ async def set_environ_endpoint(room_id: str, request_body: SetEnvironRequest, cl
     except HTTPException as e:
         raise e
     
-@app.post("/api/rooms/{room_id}/start", tags=["Game"])
+@app.post("/api/rooms/{room_id}/start", response_model=GameRoomPersonalizedResponse, tags=["Game"])
 async def start_game_endpoint(room_id: str, client_id: str = Header(..., alias="X-Client-ID")):
     try:
-        internal_room = game_manager.start_game(room_id, client_id)
+        internal_room = await game_manager.start_game(room_id, client_id)
         await game_notifier.notify_room_update(internal_room)
-        return {"status": "success", "message": "Game started"}
+        return game_notifier._create_personalized_room_view(internal_room, for_client_id=client_id)
+        
     except HTTPException as e:
         raise e
     

@@ -9,12 +9,11 @@ logger = logging.getLogger(__name__)
 class GameNotifier:
     def __init__(self, connection_manager: ConnectionManager):
         self._connection_manager = connection_manager
-
+    def is_client_connected(self, room_id: str, client_id: str) -> bool:
+        return self._connection_manager.is_client_connected(room_id, client_id)
+    async def close_and_remove_room_connections(self, room_id: str):
+        await self._connection_manager.close_and_remove_room_connections(room_id)
     async def notify_room_update(self, room: GameRoom):
-        """
-        Главный метод рассылки. Отправляет КАЖДОМУ игроку его
-        персональное состояние комнаты.
-        """
         if not self._connection_manager:
             logger.warning(f"Room {room.room_id}: ConnectionManager is not set.")
             return
@@ -31,17 +30,14 @@ class GameNotifier:
                 )
 
     async def send_personal_event(self, room_id: str, client_id: str, text: str):
-        """Отправляет одноразовое ТЕКСТОВОЕ событие (для Комиссара)."""
         message = WsMessage(type="personal_event", payload={"text": text})
         await self._connection_manager.send_personal_message(room_id, client_id, message.model_dump_json())
 
     async def send_team_activity_update(self, room_id: str, client_id: str, payload: Dict):
-        """Отправляет обновление о действии союзника."""
         message = WsMessage(type="team_activity_update", payload=payload)
         await self._connection_manager.send_personal_message(room_id, client_id, message.model_dump_json())
 
     async def send_emote_notification(self, room_id: str, client_id: str, payload: Dict):
-        """Отправляет уведомление о полученном эмодзи."""
         message = WsMessage(type="receive_emote", payload=payload)
         await self._connection_manager.send_personal_message(room_id, client_id, message.model_dump_json())
 
@@ -67,9 +63,18 @@ class GameNotifier:
             phase_time_left = max(0, remaining)
             
         return GameRoomPublic(
-            room_id=room.room_id, players=public_players, status=room.status,
-            roles=room.roles, environ=room.environ, phase=room.phase, day_number=room.day_number,
-            last_events=room.last_events, winner=room.winner, phase_time_left=phase_time_left, phase_duration=room.phase_duration, 
+            room_id=room.room_id, 
+            players=public_players, 
+            status=room.status,
+            roles=room.roles, 
+            environ=room.environ, 
+            phase=room.phase, 
+            day_number=room.day_number,
+            last_events=room.last_events, 
+            winner=room.winner, 
+            phase_time_left=phase_time_left, 
+            phase_duration=room.phase_duration,
+            active_narration=room.active_narration
         )
 
     def _create_personalized_room_view(self, room: GameRoom, for_client_id: str) -> GameRoomPersonalizedResponse:
