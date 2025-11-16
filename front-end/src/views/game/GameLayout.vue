@@ -1,12 +1,17 @@
 <template>
     <div class="game-layout">
         <MyRolePanel />
+
         <TimerBar v-if="gameStore.room?.phase_time_left && gameStore.room.phase_duration"
             :initial-time-left="gameStore.room.phase_time_left" :total-duration="gameStore.room.phase_duration" />
+
         <NightActionsPanel v-if="gameStore.isNightActionPhase" :selected-player-name="selectedPlayerName"
             @player-select="$emit('playerSelect', $event)" />
+
         <div v-else class="day-view">
-            <HostDisplay v-if="!hasNarrationEvents" :message="hostMessage" />
+            <!-- HostDisplay теперь всегда на месте и сам решает, что показать -->
+            <HostDisplay :message="hostMessage" />
+
             <PlayerGrid>
                 <PlayerCard v-for="player in gameStore.room?.players" :key="player.name" :player="player"
                     :is-selectable="isPlayerSelectable(player)" :is-selected="player.name === selectedPlayerName"
@@ -43,10 +48,6 @@ defineEmits(['playerSelect']);
 
 const gameStore = useGameStore();
 
-const hasNarrationEvents = computed(() => {
-    return (gameStore.room?.last_events ?? []).length > 0;
-});
-
 const isDiscussionPhase = computed(() => {
     const phase = gameStore.room?.phase;
     return phase === 'day' || phase === 'introduction_day';
@@ -55,31 +56,39 @@ const isDiscussionPhase = computed(() => {
 const isVotingPhase = computed(() => gameStore.isVotingPhase);
 
 const hostMessage = computed(() => {
-    const phase = gameStore.room?.phase;
-    const day = gameStore.room?.day_number;
+    const activeNarration = gameStore.room?.active_narration;
 
+    // 1. Приоритет №1: Показываем нарратив от AI для текущей фазы, если он есть.
+    if (activeNarration) {
+        // Для вопросов голосования используем summary, для остального - narration.
+        return activeNarration.summary || activeNarration.narration || 'Ведущий готовит инструкции...';
+    }
+
+    // 2. Приоритет №2: Если нарратива нет, но есть результаты ПРОШЛОЙ фазы,
+    // показываем заглушку, пока DayResultsPanel активен.
+    if ((gameStore.room?.last_events ?? []).length > 0) {
+        return 'Ведущий подводит итоги...';
+    }
+
+    // 3. Фолбэк: Если нет ни того, ни другого, показываем простой шаблонный текст.
+    const phase = gameStore.room?.phase;
     switch (phase) {
-        case 'introduction_night':
-            return "Ночь знакомств. Расскажите ведущему о себе в форме ниже.";
         case 'introduction_day':
-            return "Первый день. Познакомьтесь друг с другом и обсудите, кто кажется вам подозрительным.";
         case 'day':
-            return `День ${day}. Обсудите события прошедшей ночи.`;
+            return "Идет обсуждение. Выскажите свои подозрения.";
         case 'joke_voting':
-            return "Шуточное голосование! Выберите самого подозрительного игрока.";
+            return "Шуточное голосование. Выберите самого подозрительного игрока.";
         case 'voting':
-            return "Голосование за казнь! Выберите игрока, которого вы считаете мафией.";
-        case 'night':
-            return `Ночь ${day}. Активные роли делают свой ход...`;
+            return "Голосование за казнь. Выберите, кого вы считаете мафией.";
         default:
-            return 'Ожидание следующей фазы...';
+            return ''; // В ночной фазе HostDisplay не нужен
     }
 });
+
 const isPlayerSelectable = (player: PlayerPublic) => {
     if (!player.is_alive || gameStore.myPlayerHasActed) return false;
     return isVotingPhase.value;
 };
-
 
 const voteButtonText = computed(() => {
     if (gameStore.myPlayerHasActed) return 'Ожидаем других...';
@@ -95,12 +104,6 @@ const submitVote = () => {
     if (!props.selectedPlayerName) return;
     gameStore.performAction('vote', { target_name: props.selectedPlayerName });
 };
-
-const cleanedHostMessage = computed(() => {
-    const message = hostMessage.value;
-    if (!message) return '';
-    return message.replace(/{{{|}}}/g, '');
-});
 </script>
 
 <style scoped>

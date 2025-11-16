@@ -44,7 +44,7 @@ PHASE_DURATIONS: Dict[GamePhase, float] = {
 }
 
 PRE_GENERATION_MAP: Dict[GamePhase, str] = {
-    GamePhase.INTRODUCTION_NIGHT: "day_start", 
+    GamePhase.INTRODUCTION_NIGHT: "day_start",
     GamePhase.INTRODUCTION_DAY: "joke_voting_start",
     GamePhase.JOKE_VOTING: "night_start",
     GamePhase.NIGHT: "day_start",
@@ -58,7 +58,7 @@ class GameManager:
         self.MAX_ROOMS_PER_HOST = 3
         self._notifier = notifier
 
-    def _collect_ai_context(self, room: GameRoom) -> AIContext:      
+    def _collect_ai_context(self, room: GameRoom) -> AIContext:
         setting = room.environ or "мрачный город, погрязший в тайнах"
         player_descriptions = {}
         for p in room.players:
@@ -78,7 +78,10 @@ class GameManager:
         while True:
             room_id = ''.join(random.choices(string.ascii_uppercase + string.digits, k=4))
             if room_id not in self.active_rooms: return room_id
-    
+
+    def _sanitize_for_llm(self, text: str) -> str:
+        return text.replace('{', '{{').replace('}', '}}')
+
     def get_room(self, room_id: str) -> GameRoom:
         room = self.active_rooms.get(room_id)
         if not room: raise HTTPException(status_code=404, detail="Комната не найдена")
@@ -182,6 +185,7 @@ class GameManager:
                 except (asyncio.TimeoutError, Exception) as e:
                     logger.error(f"Room {room.room_id}: Result narration/processing failed: {e}")
                     if not processing_task.done(): processing_task.cancel()
+                
                 await self._notifier.notify_room_update(room)
                 await asyncio.sleep(RESULTS_DISPLAY_PAUSE)
 
@@ -232,65 +236,6 @@ class GameManager:
             room.phase = next_phase
             await self._notifier.notify_room_update(room)
 
-    async def _process_joke_vote_results(self, room: GameRoom):
-        context = self._collect_ai_context(room)
-        event_type = "joke_vote_result"; event_data = {}
-        if not room.joke_votes or (len(counts := Counter(room.joke_votes.values()).most_common(2)) > 1 and counts[0][1] == counts[1][1]):
-            event_type = "joke_vote_tie"
-        else:
-            winner_player = next((p for p in room.players if p.client_id == counts[0][0]), None)
-            if winner_player: event_data["victim_name"] = winner_player.name
-        
-        narration_json = await ai_narrator.generate_narration(context, event_type, event_data)
-        room.last_events.append({**narration_json.model_dump(), "type": event_type})
-        
-    async def _process_lynch_vote_results(self, room: GameRoom):
-        context = self._collect_ai_context(room)
-        event_type = "lynch_victim"; event_data = {}
-        if not room.lynch_votes or (len(counts := Counter(room.lynch_votes.values()).most_common(2)) > 1 and counts[0][1] == counts[1][1]):
-            event_type = "lynch_tie"
-        else:
-            lynched_player = next((p for p in room.players if p.client_id == counts[0][0]), None)
-            if lynched_player:
-                lynched_player.is_alive = False
-                event_data["victim_name"] = lynched_player.name
-
-        narration_json = await ai_narrator.generate_narration(context, event_type, event_data)
-        room.last_events.append({**narration_json.model_dump(), "type": event_type})
-
-    async def _process_night_results(self, room: GameRoom):
-        context = self._collect_ai_context(room)
-        actions = room.night_actions
-        whore_target_id = self._get_team_target(actions.whore_block_votes)
-        blocked_players = [whore_target_id] if whore_target_id else []
-        mafia_target_id = self._get_team_target(actions.mafia_kill_votes, ignored_voters=blocked_players)
-        healed_target_id = self._get_team_target(actions.doctor_heal_votes, ignored_voters=blocked_players)
-        commissar_target_id = self._get_team_target(actions.commissar_check_votes, ignored_voters=blocked_players)
-
-        if commissar_target_id and (commissars := [p for p in room.players if p.role == PlayerRole.COMMISSAR and p.is_alive]):
-            target_player = next((p for p in room.players if p.client_id == commissar_target_id), None)
-            if target_player:
-                is_mafia = "Мафия" if target_player.role == PlayerRole.MAFIA else "Не мафия"
-                result_text = f"Результат вашей проверки: игрок {target_player.name} - {is_mafia}."
-                for commissar in commissars:
-                    await self._notifier.send_personal_event(room.room_id, commissar.client_id, result_text)
-        
-        event_data = {}; event_type = ""
-        if mafia_target_id and mafia_target_id != healed_target_id:
-            killed_player = next((p for p in room.players if p.client_id == mafia_target_id), None)
-            if killed_player:
-                killed_player.is_alive = False; event_type = "night_kill"; event_data["victim_name"] = killed_player.name
-        elif mafia_target_id and mafia_target_id == healed_target_id:
-            healed_player = next((p for p in room.players if p.client_id == healed_target_id), None)
-            event_type = "night_save"
-            if healed_player: event_data["victim_name"] = healed_player.name
-        else:
-            event_type = "night_no_kill"
-            
-        if event_type:
-            narration_json = await ai_narrator.generate_narration(context, event_type, event_data)
-            room.last_events.append({**narration_json.model_dump(), "type": event_type})
-
     async def process_action(self, room_id: str, client_id: str, action: PlayerActionRequest):
         room = self.get_room(room_id)
         async with room.lock:
@@ -298,7 +243,7 @@ class GameManager:
             if not player or not player.is_alive: raise HTTPException(status_code=403, detail="Действие недоступно")
         
             action_handlers = {
-                (GamePhase.INTRODUCTION_NIGHT, ActionType.INTRODUCE): lambda: setattr(player, 'description', action.payload.get("description", "")),
+                (GamePhase.INTRODUCTION_NIGHT, ActionType.INTRODUCE): lambda: setattr(player, 'description', self._sanitize_for_llm(action.payload.get("description", ""))),
                 (GamePhase.INTRODUCTION_DAY, ActionType.READY_FOR_VOTE): lambda: room.ready_votes.update({player.client_id: True}),
                 (GamePhase.DAY, ActionType.READY_FOR_VOTE): lambda: room.ready_votes.update({player.client_id: True}),
                 (GamePhase.JOKE_VOTING, ActionType.VOTE): lambda: self._handle_vote(room, player, action.payload, room.joke_votes),
@@ -369,7 +314,7 @@ class GameManager:
             team_size = len(team_members)
             if team_size == 0: continue
             votes_for_team = votes_map.get(role)
-            if not votes_for_team: return False
+            if votes_for_team is None: continue
             if len(votes_for_team) == team_size: continue
             vote_counts = Counter(votes_for_team.values())
             most_common_vote = vote_counts.most_common(1)
@@ -379,48 +324,29 @@ class GameManager:
 
     async def _process_joke_vote_results(self, room: GameRoom):
         context = self._collect_ai_context(room)
-        event_type = "joke_vote_result"
-        event_data = {}
-        
-        if not room.joke_votes:
-            event_type = "joke_vote_tie" 
+        event_type = "joke_vote_result"; event_data = {}
+        if not room.joke_votes or (len(counts := Counter(room.joke_votes.values()).most_common(2)) > 1 and counts[0][1] == counts[1][1]):
+            event_type = "joke_vote_tie"
         else:
-            vote_counts = Counter(room.joke_votes.values())
-            top_two = vote_counts.most_common(2)
-            if len(top_two) > 1 and top_two[0][1] == top_two[1][1]:
-                event_type = "joke_vote_tie"
-            else:
-                winner_id = top_two[0][0]
-                winner_player = next((p for p in room.players if p.client_id == winner_id), None)
-                if winner_player:
-                    event_data["victim_name"] = winner_player.name
+            winner_player = next((p for p in room.players if p.client_id == counts[0][0]), None)
+            if winner_player: event_data["victim_name"] = winner_player.name
         
         narration_json = await ai_narrator.generate_narration(context, event_type, event_data)
-        final_event = {**narration_json.model_dump(), "type": event_type}
-        room.last_events.append(final_event)
+        room.last_events.append({**narration_json.model_dump(), "type": event_type})
         
     async def _process_lynch_vote_results(self, room: GameRoom):
         context = self._collect_ai_context(room)
-        event_type = "lynch_victim"
-        event_data = {}
-
-        if not room.lynch_votes:
+        event_type = "lynch_victim"; event_data = {}
+        if not room.lynch_votes or (len(counts := Counter(room.lynch_votes.values()).most_common(2)) > 1 and counts[0][1] == counts[1][1]):
             event_type = "lynch_tie"
         else:
-            vote_counts = Counter(room.lynch_votes.values())
-            top_two = vote_counts.most_common(2)
-            if len(top_two) > 1 and top_two[0][1] == top_two[1][1]:
-                event_type = "lynch_tie"
-            else:
-                lynched_id = top_two[0][0]
-                lynched_player = next((p for p in room.players if p.client_id == lynched_id), None)
-                if lynched_player:
-                    lynched_player.is_alive = False
-                    event_data["victim_name"] = lynched_player.name
-        
+            lynched_player = next((p for p in room.players if p.client_id == counts[0][0]), None)
+            if lynched_player:
+                lynched_player.is_alive = False
+                event_data["victim_name"] = lynched_player.name
+
         narration_json = await ai_narrator.generate_narration(context, event_type, event_data)
-        final_event = {**narration_json.model_dump(), "type": event_type}
-        room.last_events.append(final_event)
+        room.last_events.append({**narration_json.model_dump(), "type": event_type})
 
     async def _process_night_results(self, room: GameRoom):
         context = self._collect_ai_context(room)
@@ -431,36 +357,29 @@ class GameManager:
         healed_target_id = self._get_team_target(actions.doctor_heal_votes, ignored_voters=blocked_players)
         commissar_target_id = self._get_team_target(actions.commissar_check_votes, ignored_voters=blocked_players)
 
-        if commissar_target_id:
-            commissars = [p for p in room.players if p.role == PlayerRole.COMMISSAR and p.is_alive]
+        if commissar_target_id and (commissars := [p for p in room.players if p.role == PlayerRole.COMMISSAR and p.is_alive]):
             target_player = next((p for p in room.players if p.client_id == commissar_target_id), None)
-            if commissars and target_player:
+            if target_player:
                 is_mafia = "Мафия" if target_player.role == PlayerRole.MAFIA else "Не мафия"
                 result_text = f"Результат вашей проверки: игрок {target_player.name} - {is_mafia}."
                 for commissar in commissars:
                     await self._notifier.send_personal_event(room.room_id, commissar.client_id, result_text)
-
-        event_data = {}
-        event_type = ""
-
+        
+        event_data = {}; event_type = ""
         if mafia_target_id and mafia_target_id != healed_target_id:
             killed_player = next((p for p in room.players if p.client_id == mafia_target_id), None)
             if killed_player:
-                killed_player.is_alive = False
-                event_type = "night_kill"
-                event_data["victim_name"] = killed_player.name
+                killed_player.is_alive = False; event_type = "night_kill"; event_data["victim_name"] = killed_player.name
         elif mafia_target_id and mafia_target_id == healed_target_id:
             healed_player = next((p for p in room.players if p.client_id == healed_target_id), None)
             event_type = "night_save"
-            if healed_player:
-                event_data["victim_name"] = healed_player.name
+            if healed_player: event_data["victim_name"] = healed_player.name
         else:
             event_type = "night_no_kill"
             
         if event_type:
             narration_json = await ai_narrator.generate_narration(context, event_type, event_data)
-            final_event = {**narration_json.model_dump(), "type": event_type}
-            room.last_events.append(final_event)
+            room.last_events.append({**narration_json.model_dump(), "type": event_type})
       
     def _check_and_handle_win_condition(self, room: GameRoom) -> bool:
         if room.winner: return True
@@ -537,7 +456,7 @@ class GameManager:
         if room.status != RoomStatus.WAITING: raise HTTPException(status_code=400, detail="Нельзя менять настройки после начала игры")
         total_roles = sum(new_roles.model_dump().values())
         if len(room.players) != total_roles: raise HTTPException(status_code=400, detail=f"Количество ролей ({total_roles}) не совпадает с количеством игроков ({len(room.players)})")
-        if new_roles.mafia > 0 and (len(room.players) / 3) < new_roles.mafia:
+        if new_roles.mafia > 0 and (3 * new_roles.mafia > len(room.players)):
             raise HTTPException(status_code=400, detail="Мафии не может быть больше трети игроков")
         room.roles = new_roles
         return room
@@ -547,7 +466,7 @@ class GameManager:
         if client_id != room.host_id: raise HTTPException(status_code=403, detail="Только хост может менять настройки")
         if room.status != RoomStatus.WAITING: raise HTTPException(status_code=400, detail="Нельзя менять настройки после начала игры")
         if len(environ) > 300: raise HTTPException(status_code=400, detail=f"Длина описания не может превышать 300 символов (текущая: {len(environ)})")
-        room.environ = environ
+        room.environ = self._sanitize_for_llm(environ)
         return room
     
     async def process_websocket_message(self, room_id: str, client_id: str, data: Dict):
