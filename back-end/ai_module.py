@@ -6,7 +6,7 @@ from typing import Dict, List
 from google.genai import Client, types, errors
 
 from schemas import AINarration, AIContext
-from config import settings # Используем централизованный конфиг
+from config import settings 
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,7 @@ class AINarrator:
         self._api_key = settings.GEMINI_API_KEY
         if not self._api_key:
             logger.warning("GEMINI_API_KEY is not set in .env file. AI Narrator will use fallback mode.")
-        
-        # Базовые настройки, которые не меняются
+
         self._base_config = {
             "thinking_config": types.ThinkingConfig(thinking_budget=0),
             "safety_settings": [
@@ -49,20 +48,16 @@ class AINarrator:
                 request_config["system_instruction"] = system_instruction
                 
                 async with Client(api_key=self._api_key).aio as aclient:
-                    # Используем НЕ-стриминговую версию
                     response = await aclient.models.generate_content(
                         model='gemini-flash-latest',
                         contents=contents,
                         config=request_config
                     )
                     
-                    # R --- ВОТ ОНО, ФИНАЛЬНОЕ ИСПРАВЛЕНИЕ ---
                     try:
-                        # Просто берем текст ответа и парсим его как JSON
                         parsed_json = json.loads(response.text)
                         return AINarration(**parsed_json)
                     except (json.JSONDecodeError, TypeError) as e:
-                        # Если Gemini вернул невалидный JSON, логируем и используем фолбэк
                         logger.error(f"AI Narrator failed to parse JSON from response. Error: {e}. Response text: {response.text}")
                         return self._get_fallback_narration(event_type, event_data)
 

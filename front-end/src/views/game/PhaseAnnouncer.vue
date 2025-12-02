@@ -74,15 +74,12 @@ const subtitleClasses = computed(() => {
     transition: color 0.3s ease;
 }
 
-/* Новые классы для цвета ролей */
 .announcer-subtitle.role-mafia {
     color: var(--primary-brand-color);
-    /* Красный для мафии */
 }
 
 .announcer-subtitle.role-citizen {
     color: var(--citizen-color, #5ea8ff);
-    /* Синий/голубой для мирных */
 }
 
 

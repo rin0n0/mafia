@@ -42,28 +42,22 @@ watch(() => [props.show, props.targetElement], async ([newShow, newTarget]) => {
         if (!tooltipEl) return;
         const tooltipRect = tooltipEl.getBoundingClientRect();
 
-        const spacing = 8; // Отступ от элемента
+        const spacing = 8;
 
-        // 1. Рассчитываем идеальное положение (сверху по центру)
         let y = targetRect.top - tooltipRect.height - spacing;
         let x = targetRect.left + (targetRect.width / 2) - (tooltipRect.width / 2);
 
-        // 2. Корректируем по горизонтали, если выходит за границы
         const viewportWidth = window.innerWidth;
         if (x < spacing) {
-            // Выходит за левый край
             x = spacing;
         } else if (x + tooltipRect.width > viewportWidth - spacing) {
-            // Выходит за правый край
             x = viewportWidth - tooltipRect.width - spacing;
         }
 
-        // 3. Корректируем по вертикали, если сверху нет места
         if (y < spacing) {
             y = targetRect.bottom + spacing;
         }
 
-        // 4. Рассчитываем положение стрелочки, чтобы она указывала на центр цели
         const targetCenter = targetRect.left + targetRect.width / 2;
         arrowLeft.value = targetCenter - x;
 
@@ -99,14 +93,12 @@ watch(() => [props.show, props.targetElement], async ([newShow, newTarget]) => {
     transform: translateX(-50%);
 }
 
-/* Стрелочка снизу (когда тултип сверху) */
 .tooltip-container[style*="top"] .tooltip-arrow {
     top: 100%;
     border-width: 6px 6px 0 6px;
     border-color: rgba(26, 26, 26, 0.95) transparent transparent transparent;
 }
 
-/* Стрелочка сверху (когда тултип снизу) */
 .tooltip-container[style*="bottom"] .tooltip-arrow {
     bottom: 100%;
     border-width: 0 6px 6px 6px;

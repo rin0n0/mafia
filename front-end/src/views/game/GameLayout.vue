@@ -9,7 +9,6 @@
             @player-select="$emit('playerSelect', $event)" />
 
         <div v-else class="day-view">
-            <!-- HostDisplay теперь всегда на месте и сам решает, что показать -->
             <HostDisplay :message="hostMessage" />
 
             <PlayerGrid>
@@ -58,19 +57,14 @@ const isVotingPhase = computed(() => gameStore.isVotingPhase);
 const hostMessage = computed(() => {
     const activeNarration = gameStore.room?.active_narration;
 
-    // 1. Приоритет №1: Показываем нарратив от AI для текущей фазы, если он есть.
     if (activeNarration) {
-        // Для вопросов голосования используем summary, для остального - narration.
         return activeNarration.summary || activeNarration.narration || 'Ведущий готовит инструкции...';
     }
 
-    // 2. Приоритет №2: Если нарратива нет, но есть результаты ПРОШЛОЙ фазы,
-    // показываем заглушку, пока DayResultsPanel активен.
     if ((gameStore.room?.last_events ?? []).length > 0) {
         return 'Ведущий подводит итоги...';
     }
 
-    // 3. Фолбэк: Если нет ни того, ни другого, показываем простой шаблонный текст.
     const phase = gameStore.room?.phase;
     switch (phase) {
         case 'introduction_day':
@@ -81,7 +75,7 @@ const hostMessage = computed(() => {
         case 'voting':
             return "Голосование за казнь. Выберите, кого вы считаете мафией.";
         default:
-            return ''; // В ночной фазе HostDisplay не нужен
+            return '';
     }
 });
 

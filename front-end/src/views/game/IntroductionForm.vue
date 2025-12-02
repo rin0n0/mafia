@@ -1,6 +1,5 @@
 <template>
     <div class="intro-form">
-        <!-- Блок с AI-приветствием -->
         <div v-if="welcomeNarration" class="ai-welcome">
             <h3 class="form-title">{{ welcomeNarration.title }}</h3>
             <p class="form-subtitle" v-html="welcomeNarration.narration"></p>
@@ -81,7 +80,6 @@ const submit = () => { emit('submitDescription', description.value); };
 
 .ai-welcome .form-title {
     font-size: 1.8rem;
-    /* Делаем заголовок от AI крупнее */
 }
 
 .ai-welcome .form-subtitle {

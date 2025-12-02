@@ -68,15 +68,12 @@ const isMyRoleActive = computed(() => !!gameStore.myRole && gameStore.myRole !==
 
 const eligibleTargets = computed(() => {
     if (!gameStore.room) return [];
-
-    // Фильтруем только живых игроков
     const alivePlayers = gameStore.room.players.filter(p => p.is_alive);
 
     if (gameStore.myRole === 'doctor') {
-        return alivePlayers; // Доктор может выбирать любого, включая себя
+        return alivePlayers;
     }
 
-    // Остальные не могут выбирать себя и союзников
     return alivePlayers.filter(p =>
         p.name !== gameStore.myPlayer?.name &&
         !gameStore.teammates.includes(p.name)
