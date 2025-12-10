@@ -27,6 +27,8 @@ export interface GameRoomPublic {
   phase_time_left: number | null;
   phase_duration: number | null;
   active_narration: GameEvent | null;
+  confirmed_players_count: number;
+  active_player_count: number;
 }
 
 export interface EmotePayload {

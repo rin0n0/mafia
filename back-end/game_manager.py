@@ -20,7 +20,7 @@ DAY_DISCUSSION_DURATION = 180.0
 JOKE_VOTING_DURATION = 90.0
 NIGHT_DURATION = 120.0
 VOTING_DURATION = 90.0
-RESULTS_DISPLAY_PAUSE = 8.0
+RESULTS_DISPLAY_PAUSE = 30.0
 GUARANTEED_AI_WAIT_TIME = 15.0
 
 ACTIVE_NIGHT_ROLES = {PlayerRole.MAFIA, PlayerRole.DOCTOR, PlayerRole.COMMISSAR, PlayerRole.WHORE}
@@ -62,7 +62,11 @@ class GameManager:
         setting = room.environ or "мрачный город, погрязший в тайнах"
         player_descriptions = {}
         for p in room.players:
-            player_descriptions[p.name] = p.description or "загадочная личность, чье прошлое скрыто во мраке"
+            if (p.is_alive): 
+                player_descriptions[p.name] = "Живой."
+            else:
+                player_descriptions[p.name] = "Мертвый."
+            player_descriptions[p.name] += p.description or "загадочная личность, чье прошлое скрыто во мраке"
         public_history = [event.get("summary", "") for event in room.last_events if event.get("summary")]
         return AIContext(setting=setting, player_descriptions=player_descriptions, history=public_history)
 
@@ -158,6 +162,9 @@ class GameManager:
         if next_event_to_generate:
             room.pre_generation_task = asyncio.create_task(self._pre_generate_narration(room, next_event_to_generate))
         
+        if room.results_event is None:
+            room.results_event = asyncio.Event()
+
         duration = room.phase_duration
         if not duration: return
 
@@ -185,9 +192,21 @@ class GameManager:
                 except (asyncio.TimeoutError, Exception) as e:
                     logger.error(f"Room {room.room_id}: Result narration/processing failed: {e}")
                     if not processing_task.done(): processing_task.cancel()
-                
+
+                room.read_confirmations.clear()
+                room.results_event.clear()
+
                 await self._notifier.notify_room_update(room)
-                await asyncio.sleep(RESULTS_DISPLAY_PAUSE)
+
+                try:
+                    logger.info(f"Room {room.room_id}: Waiting for result confirmations...")
+                    await asyncio.wait_for(room.results_event.wait(), timeout=RESULTS_DISPLAY_PAUSE)
+                    logger.info(f"Room {room.room_id}: Results skipped by players.")
+                except asyncio.TimeoutError:
+                    logger.info(f"Room {room.room_id}: Results display finished by timeout.")
+
+                room.results_event.clear()
+
 
     async def _advance_to_next_phase(self, room: GameRoom):
         async with room.lock:
@@ -252,12 +271,15 @@ class GameManager:
                 (GamePhase.NIGHT, ActionType.DOCTOR_HEAL): lambda: self._handle_night_action(room, player, action),
                 (GamePhase.NIGHT, ActionType.COMMISSAR_CHECK): lambda: self._handle_night_action(room, player, action),
                 (GamePhase.NIGHT, ActionType.WHORE_BLOCK): lambda: self._handle_night_action(room, player, action),
+                (room.phase, ActionType.CONFIRM_READ): lambda: self._handle_confirm_read(room, player),
             }
-            handler = action_handlers.get((room.phase, action.action_type))
-
-            if handler: handler()
-            else: raise HTTPException(status_code=400, detail="Неверное действие для текущей фазы")
-            
+            if action.action_type == ActionType.CONFIRM_READ:
+                 self._handle_confirm_read(room, player)
+            else:
+                handler = action_handlers.get((room.phase, action.action_type))
+                if handler: handler()
+                else: raise HTTPException(status_code=400, detail="Неверное действие для текущей фазы")
+                
             self._check_phase_completion(room)
             await self._notifier.notify_room_update(room)
             
@@ -282,6 +304,17 @@ class GameManager:
         vote_dict = votes_attr_map.get((action.action_type, player.role))
         if vote_dict is None: raise HTTPException(status_code=403, detail="Неверное действие для вашей роли")
         self._handle_vote(room, player, action.payload, vote_dict)
+
+    def _handle_confirm_read(self, room: GameRoom, player: Player):
+        if player.is_alive:
+            room.read_confirmations[player.client_id] = True
+            
+            alive_players_count = sum(1 for p in room.players if p.is_alive)
+            confirmed_count = len(room.read_confirmations)
+            
+            if confirmed_count >= alive_players_count:
+                if room.results_event:
+                    room.results_event.set()
         
     def _check_phase_completion(self, room: GameRoom):
         if not room.phase_event or room.phase_event.is_set(): return
@@ -404,6 +437,11 @@ class GameManager:
     async def _handle_game_over(self, room: GameRoom):
         room.phase = GamePhase.GAME_OVER
         room.status = RoomStatus.FINISHED
+        context = self._collect_ai_context(room)
+        winner_text = "Мафия" if room.winner == Winner.mafia else "Мирные жители"
+        event_data = {"winner_team": winner_text}
+        narration_json = await ai_narrator.generate_narration(context, "game_over", event_data)
+        room.last_events.append({**narration_json.model_dump(), "type": "game_over_narration"})
         await self._notifier.notify_room_update(room)
         logger.info(f"Room {room.room_id}: GAME OVER. Winner: {room.winner}")
         asyncio.create_task(self._delete_room_after_delay(room.room_id, 60))

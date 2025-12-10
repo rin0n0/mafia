@@ -1,31 +1,32 @@
 import { defineStore } from "pinia";
+import { ref } from "vue";
 
 interface Notification {
   id: number;
   message: string;
 }
 
-interface UiState {
-  notifications: Notification[];
-}
-
 let notificationId = 0;
 
-export const useUiStore = defineStore("ui", {
-  state: (): UiState => ({
-    notifications: [],
-  }),
-  actions: {
-    addNotification(message: string, duration = 4000) {
-      const id = notificationId++;
-      this.notifications.push({ id, message });
+export const useUiStore = defineStore("ui", () => {
+  const notifications = ref<Notification[]>([]);
 
-      setTimeout(() => {
-        this.removeNotification(id);
-      }, duration);
-    },
-    removeNotification(id: number) {
-      this.notifications = this.notifications.filter((n) => n.id !== id);
-    },
-  },
+  function addNotification(message: string, duration = 4000) {
+    const id = notificationId++;
+    notifications.value.push({ id, message });
+
+    setTimeout(() => {
+      removeNotification(id);
+    }, duration);
+  }
+
+  function removeNotification(id: number) {
+    notifications.value = notifications.value.filter((n) => n.id !== id);
+  }
+
+  return {
+    notifications,
+    addNotification,
+    removeNotification,
+  };
 });

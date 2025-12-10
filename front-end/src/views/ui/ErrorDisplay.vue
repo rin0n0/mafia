@@ -33,7 +33,6 @@ defineEmits(['close']);
     transform: translateX(-50%);
     z-index: 3000;
     pointer-events: none;
-    /* Контейнер не должен мешать кликам */
 }
 
 .error-toast {
@@ -50,7 +49,6 @@ defineEmits(['close']);
     max-width: 90vw;
     width: 500px;
     pointer-events: auto;
-    /* А вот само уведомление должно быть кликабельным */
 }
 
 .error-icon {

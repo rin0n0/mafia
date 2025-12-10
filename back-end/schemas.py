@@ -33,13 +33,7 @@ class ActionType(str, Enum):
     DOCTOR_HEAL = "doctor_heal"
     COMMISSAR_CHECK = "commissar_check"
     WHORE_BLOCK = "whore_block"
-
-class Player(BaseModel):
-    client_id: str 
-    name: str
-    is_alive: bool = True
-    role: Optional[PlayerRole] = None
-    description: Optional[str] = None
+    CONFIRM_READ = "confirm_read"
 
 class Roles (BaseModel):
     mafia: int = 0
@@ -57,6 +51,13 @@ class NightActions(BaseModel):
     doctor_heal_votes: Dict[str, str] = Field(default_factory=dict)
     commissar_check_votes: Dict[str, str] = Field(default_factory=dict)
     whore_block_votes: Dict[str, str] = Field(default_factory=dict)
+
+class Player(BaseModel):
+    client_id: str 
+    name: str
+    is_alive: bool = True
+    role: Optional[PlayerRole] = None
+    description: Optional[str] = None
 
 class GameRoom(BaseModel):
     room_id: str
@@ -79,6 +80,9 @@ class GameRoom(BaseModel):
     night_actions: NightActions = Field(default_factory=NightActions)
     last_events: List[Dict[str, Any]] = Field(default_factory=list)
     winner: Optional[Winner] = None
+
+    read_confirmations: Dict[str, bool] = Field(default_factory=dict, exclude=True)
+    results_event: Optional[asyncio.Event] = Field(default=None, exclude=True)
 
     phase_event: Optional[asyncio.Event] = Field(default=None, exclude=True)
     game_loop_task: Optional[asyncio.Task] = Field(default=None, exclude=True)
@@ -107,6 +111,8 @@ class GameRoomPublic(BaseModel):
     phase_time_left: Optional[float] = None
     phase_duration: Optional[float] = None
     active_narration: Optional[Dict] = None
+    confirmed_players_count: int = 0
+    active_player_count: int = 0
 
 class CreateRoomRequest(BaseModel):
     host_name: str

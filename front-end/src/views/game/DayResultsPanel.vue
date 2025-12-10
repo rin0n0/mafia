@@ -1,6 +1,6 @@
 <template>
-    <div class="results-overlay">
-        <div class="results-content">
+    <div class="results-overlay" @click="handleOverlayClick">
+        <div class="results-content" @click.stop>
             <div v-for="(item, index) in resultItems" :key="index" class="event-item">
                 <span class="event-icon">{{ item.icon }}</span>
                 <div class="event-text-content">
@@ -8,13 +8,22 @@
                     <p class="event-narration" v-html="item.narration"></p>
                 </div>
             </div>
+            <div class="skip-controls">
+                <button class="btn skip-btn" :class="{ 'btn-secondary': hasConfirmed }" @click="confirmRead"
+                    :disabled="hasConfirmed || !isAlive">
+                    {{ buttonText }}
+                </button>
+                <p class="skip-counter" v-if="gameStore.room">
+                    Прочитали: {{ gameStore.room.confirmed_players_count }} / {{ gameStore.room.active_player_count }}
+                </p>
+            </div>
         </div>
     </div>
 </template>
 
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import { useGameStore } from '@/stores/gameStore';
 import type { GameEvent } from '@/types/game';
 
@@ -33,6 +42,15 @@ const eventIcons: Record<string, string> = {
     voting_start_narration: '🗳️',
 };
 
+const hasConfirmed = ref(false);
+
+const isAlive = computed(() => gameStore.myPlayer?.is_alive ?? false);
+
+const buttonText = computed(() => {
+    if (!isAlive.value) return 'Ожидание живых игроков...';
+    return hasConfirmed.value ? 'Ожидание других...' : 'Далее';
+});
+
 const formatText = (text: string) => text.replace(/{{{(.*?)}}}/g, '<strong class="player-name-highlight">$1</strong>');
 
 const resultItems = computed(() => {
@@ -45,6 +63,17 @@ const resultItems = computed(() => {
         };
     });
 });
+
+const confirmRead = () => {
+    if (!hasConfirmed.value && isAlive.value) {
+        hasConfirmed.value = true;
+        gameStore.confirmReadResults();
+    }
+};
+
+const handleOverlayClick = () => {
+    confirmRead();
+};
 </script>
 
 <style scoped>
@@ -67,7 +96,6 @@ const resultItems = computed(() => {
     padding: 2rem;
     width: 90%;
     max-width: 600px;
-    /* Увеличим для красивого текста */
     text-align: center;
     box-shadow: 0 10px 30px #000;
     animation: scale-in 0.3s;
@@ -78,7 +106,7 @@ const resultItems = computed(() => {
 .event-item {
     display: flex;
     align-items: flex-start;
-    /* Выравниваем по верху */
+
     gap: 1.5rem;
     text-align: left;
     margin-bottom: 2rem;
@@ -109,6 +137,35 @@ const resultItems = computed(() => {
     font-size: 1.1rem;
     line-height: 1.6;
     color: var(--secondary-text-color);
+}
+
+.skip-controls {
+    margin-top: 2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+}
+
+.skip-btn {
+    width: auto;
+    padding: 10px 30px;
+    min-width: 200px;
+}
+
+.skip-counter {
+    font-size: 0.9rem;
+    color: var(--secondary-text-color);
+    margin: 0;
+}
+
+.btn-secondary {
+    background-color: transparent;
+    border: 2px solid var(--input-border-color);
+    color: var(--secondary-text-color);
+    cursor: default;
+    box-shadow: none;
 }
 
 :deep(.player-name-highlight) {

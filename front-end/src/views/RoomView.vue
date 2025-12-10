@@ -1,5 +1,9 @@
 <template>
-  <div class="room-view" :class="{ 'is-night': gameStore.isNight }">
+  <div class="room-view" :class="{
+    'is-night': gameStore.isNight,
+    'is-dead': !isAlive
+  }">
+
     <PhaseAnnouncer :show="showAnnouncer" :title="announcerTitle" :subtitle="announcerSubtitle"
       :is-role="isRoleAnnouncement" :role="gameStore.myRole || undefined" @close="handleAnnouncerClose" />
     <ErrorDisplay :message="gameStore.error" @close="gameStore.clearError()" />
@@ -11,7 +15,8 @@
     <div v-else-if="gameStore.room" class="room-content"
       :class="{ 'in-game': gameStore.room.status === 'in_progress' }">
       <div class="header">
-        <router-link to="/" @click="gameStore.leaveRoom" class="back-btn" title="Покинуть комнату">
+        <router-link to="/" v-if="!gameStore.isGameOver" @click="gameStore.leaveRoom" class="back-btn"
+          title="Покинуть комнату">
           <span class="back-btn-arrow">←</span>
           <span class="back-btn-text">Назад в лобби</span>
         </router-link>
@@ -118,6 +123,7 @@ const shouldShowResultsPanel = computed(() => {
   return (gameStore.room?.last_events?.length ?? 0) > 0 && !gameStore.isGameOver;
 });
 
+const isAlive = computed(() => gameStore.myPlayer?.is_alive ?? false);
 
 const handleAnnouncerClose = () => {
   const wasRoleAnnouncement = isRoleAnnouncement.value;
@@ -242,7 +248,31 @@ const handleUpdateEnvironment = (newEnvironment: string | null) => {
   opacity: 1;
 }
 
+.room-view.is-dead::before,
+.room-view.is-dead::after {
+  filter: grayscale(100%) brightness(0.6);
+}
 
+.room-view.is-dead .room-content {
+  position: relative;
+}
+
+.room-view.is-dead::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: radial-gradient(circle, rgba(0, 0, 0, 0.2) 0%, rgba(40, 0, 0, 0.6) 80%, rgba(0, 0, 0, 0.9) 100%);
+  z-index: -1;
+  pointer-events: none;
+}
+
+.room-view.is-dead .header h1 {
+  color: #888;
+  text-shadow: none;
+}
 
 .room-content {
   width: 100%;

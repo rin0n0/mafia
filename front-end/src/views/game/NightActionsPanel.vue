@@ -1,5 +1,5 @@
 <template>
-    <div v-if="isMyRoleActive" class="night-actions-panel">
+    <div v-if="isMyRoleActive && isAlive" class="night-actions-panel">
         <div class="panel-header">
             <h3>{{ actionConfig.title }}</h3>
             <p>{{ actionConfig.description }}</p>
@@ -16,6 +16,10 @@
                 {{ buttonText }}
             </button>
         </div>
+    </div>
+    <div v-if="!isAlive">
+        <h3>Вы мертвы</h3>
+        <p>Наблюдайте за тем, как все пытаются выжить без вас.</p>
     </div>
     <div v-else class="night-wait-panel">
         <h3>Ночь в городе...</h3>
@@ -35,6 +39,8 @@ const props = defineProps<{
 const emit = defineEmits(['playerSelect']);
 
 const gameStore = useGameStore();
+const isAlive = computed(() => gameStore.myPlayer?.is_alive ?? false);
+
 
 const ACTION_CONFIGS: Record<string, { title: string; description: string; buttonText: string; actionType: string; }> = {
     mafia: {

@@ -61,6 +61,9 @@ class GameNotifier:
             elapsed = time.time() - room.phase_start_time
             remaining = room.phase_duration - elapsed
             phase_time_left = max(0, remaining)
+
+        alive_count = sum(1 for p in room.players if p.is_alive)
+        confirmed_count = len(room.read_confirmations)
             
         return GameRoomPublic(
             room_id=room.room_id, 
@@ -74,7 +77,9 @@ class GameNotifier:
             winner=room.winner, 
             phase_time_left=phase_time_left, 
             phase_duration=room.phase_duration,
-            active_narration=room.active_narration
+            active_narration=room.active_narration,
+            confirmed_players_count=confirmed_count,
+            active_player_count=alive_count,
         )
 
     def _create_personalized_room_view(self, room: GameRoom, for_client_id: str) -> GameRoomPersonalizedResponse:
