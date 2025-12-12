@@ -100,11 +100,11 @@ class AINarrator:
         victim = event_data.get('victim_name', 'кто-то из присутствующих')
         winner = event_data.get('winner_team', 'одна из сторон')
         
-        length_constraint = "Ответь кратко, не более 3-4 предложений."
+        length_constraint = "Ответь кратко, не более 2-3 предложений."
         
         style_instruction = "Используй терминологию и атмосферу текущего сеттинга. Избегай слов 'город' или 'жители', если они не подходят к сеттингу."
 
-        queries = {
+        base_templates = {
             "game_start": (
                 f"Игра начинается. Опиши локацию и текущую атмосферу в сеттинге. "
                 f"Введи игроков в курс дела, создай ощущение надвигающейся тайной угрозы. {length_constraint}"
@@ -172,29 +172,55 @@ class AINarrator:
             ),
         }
         
-        query = queries.get(event_type, f"Опиши текущую ситуацию. {length_constraint}")
-        return f"{query} {style_instruction}"
+        additional_instructions = []
+        whore_target = event_data.get('whore_target_name')
+        if whore_target and event_type in ["night_kill", "night_save", "night_no_kill"]:
+            additional_instructions.append(
+                f"Вплети в рассказ деталь: игрок {whore_target} был отвлечен визитом "
+                f"Ночной Бабочки (или аналога в сеттинге) и пропустил всё происходящее."
+            )
+        base_text = base_templates.get(event_type, "Опиши текущую ситуацию.")
+        extras_text = " ".join(additional_instructions)
+        constraints = "Ответь кратко, не более 3-4 предложений. Используй терминологию сеттинга."
+
+        return f"{base_text} {extras_text} {constraints} {style_instruction}"
 
     def _get_fallback_narration(self, event_type: str, event_data: Dict) -> AINarration:
         logger.info(f"Using fallback narration for event: {event_type}")
         winner = event_data.get('winner_team')
         victim_name = event_data.get("victim_name", "один из жителей")
         
-        fallbacks = {
+        base_templates = {
             "game_start": AINarration(title="Начало игры", summary="Ведущий приветствует игроков.", narration="Добро пожаловать в игру. Город засыпает, открывая сцену для тайн и интриг. Сделайте свой первый ход."),
             "night_kill": AINarration(title="Потеря в ночи", summary=f"Ночью был убит игрок {victim_name}.", narration=f"С наступлением утра город обнаружил, что {victim_name} стал очередной жертвой безжалостной мафии."),
             "night_save": AINarration(title="На волосок от смерти", summary=f"Было совершено покушение на игрока {victim_name}, но он был спасен.", narration=f"Темные силы пытались унести еще одну жизнь, но {victim_name} чудом избежал гибели."),
             "night_no_kill": AINarration(title="Затишье перед бурей", summary="Этой ночью никто не умер.", narration="Город провел ночь в напряженном затишье. Никто не был убит, но чувство опасности лишь усилилось."),
             "night_start": AINarration(title="Наступает ночь", summary="Город засыпает.", narration="Тени удлиняются, и на улицы выходит зло. Мирные жители спешат по домам, надеясь пережить эту ночь."),
-            "day_start": AINarration(title="Новый день", summary="Город просыпается.", narration="Солнце встает, освещая улицы. Жители собираются, чтобы обсудить ночные происшествия."),
-            "voting_start": AINarration(title="Время выбора", summary="Начинается голосование.", narration="Время разговоров прошло. Теперь городу предстоит сделать тяжелый выбор и решить, кто виновен."),
+            "day_start": AINarration(title="Новый день", summary="Город просыпается. Обсудите ночь.", narration="Солнце встает, освещая улицы. Жители собираются, чтобы обсудить ночные происшествия."),
+            "voting_start": AINarration(title="Время выбора", summary="Начинается голосование. Выберите того, кого считаете мафией", narration="Время разговоров прошло. Теперь городу предстоит сделать тяжелый выбор и решить, кто виновен."),
             "lynch_victim": AINarration(title="Приговор толпы", summary=f"Дневным голосованием был казнен игрок {victim_name}.", narration=f"По итогам дневного голосования, гнев толпы обрушился на {victim_name}. Его судьба решена."),
             "lynch_tie": AINarration(title="Ничья", summary="Голоса разделились.", narration="Мнения разделились поровну. Сегодня никто не будет казнен, и напряжение в городе только растет."),
-            "joke_voting_start": AINarration(title="Первые подозрения", summary="Кто кажется вам самым подозрительным?", narration="Пришло время поделиться первыми впечатлениями. Выберите того, кто кажется вам наиболее подозрительным."),
-            "joke_vote_result": AINarration(title="Подозрительный тип", summary=f"Самым подозрительным назвали игрока {victim_name}.", narration=f"Большинство косо смотрит на игрока {victim_name}. Пока это ничего не значит, но осадок остался."),
+            "joke_voting_start": AINarration(title="Первые подозрения", summary="Кто кажется вам самым крутым?", narration="Пришло время поделиться первыми впечатлениями. Выберите того, кто кажется вам наиболее подозрительным."),
+            "joke_vote_result": AINarration(title="Подозрительный тип", summary=f"Самым крутым назвали игрока {victim_name}.", narration=f"Большинство с уважением смотрит на игрока {victim_name}. Пока что это ничего не значит."),
             "joke_vote_tie": AINarration(title="Смешанные чувства", summary="Мнения о подозрительности разделились.", narration="Горожане не смогли определиться, кто выглядит подозрительнее всех. Кажется, никому нельзя доверять."),
             "game_over": AINarration(title="Финал", summary=f"Игра завершена. Победители: {winner}.", narration="История этого города подошла к концу. Улицы опустели, и лишь ветер разносит эхо прошедших событий."),
         }
-        return fallbacks.get(event_type, AINarration(title="Событие", summary="Произошло игровое событие.", narration="Ведущий подводит итоги..."))
+        template = base_templates.get(event_type, {
+            "title": "Событие",
+            "summary": "Произошло игровое событие.",
+            "narration": "Ведущий подводит итоги..."
+        })
+        extra_narrative_parts = []
+        whore_target = event_data.get('whore_target_name')
+        if whore_target and event_type in ["night_kill", "night_save", "night_no_kill"]:
+            extra_narrative_parts.append(
+                f" Кроме того, {whore_target} провел ночь в очень приятной, но отвлекающей компании."
+            )
+        final_narration_text = template["narration"] + "".join(extra_narrative_parts)
+        return AINarration(
+            title=template["title"],
+            summary=template["summary"],
+            narration=final_narration_text
+        )
 
 ai_narrator = AINarrator()
