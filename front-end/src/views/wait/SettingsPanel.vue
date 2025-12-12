@@ -49,6 +49,7 @@ const activeTab = ref<'roles' | 'environment'>('roles');
 .settings-panel {
   width: 100%;
   background-color: rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(6px);
   border-radius: 12px;
   padding: 1.5rem;
   display: flex;

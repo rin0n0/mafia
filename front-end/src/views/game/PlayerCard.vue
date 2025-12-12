@@ -80,7 +80,8 @@ const indicators = computed(() => {
 
 <style scoped>
 .player-card {
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(6px);
     border-radius: 12px;
     padding: 1rem;
     text-align: center;

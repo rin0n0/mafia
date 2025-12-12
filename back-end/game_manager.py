@@ -15,7 +15,7 @@ from ai_module import ai_narrator
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-INTRO_NIGHT_DURATION = 60.0
+INTRO_NIGHT_DURATION = 120.0
 DAY_DISCUSSION_DURATION = 180.0
 JOKE_VOTING_DURATION = 90.0
 NIGHT_DURATION = 120.0
@@ -58,17 +58,23 @@ class GameManager:
         self.MAX_ROOMS_PER_HOST = 3
         self._notifier = notifier
 
-    def _collect_ai_context(self, room: GameRoom) -> AIContext:
+    def _collect_ai_context(self, room: GameRoom) -> AIContext:      
         setting = room.environ or "мрачный город, погрязший в тайнах"
         player_descriptions = {}
         for p in room.players:
-            if (p.is_alive): 
-                player_descriptions[p.name] = "Живой."
-            else:
-                player_descriptions[p.name] = "Мертвый."
-            player_descriptions[p.name] += p.description or "загадочная личность, чье прошлое скрыто во мраке"
-        public_history = [event.get("summary", "") for event in room.last_events if event.get("summary")]
-        return AIContext(setting=setting, player_descriptions=player_descriptions, history=public_history)
+            status_tag = "[СТАТУС: ЖИВ]" if p.is_alive else "[СТАТУС: МЕРТВ]"
+            desc = p.description or "загадочная личность, чье прошлое скрыто во мраке"
+            player_descriptions[p.name] = f"{status_tag} {desc}"
+        full_narrative_history = []
+        for event in room.last_events[-10:]: 
+            text = event.get("narration") or event.get("summary") or event.get("text")
+            if text:
+                full_narrative_history.append(text)
+        return AIContext(
+            setting=setting,
+            player_descriptions=player_descriptions,
+            history=full_narrative_history, 
+        )
 
     async def _pre_generate_narration(self, room: GameRoom, event_type: str, event_data: Dict = None):
         if not event_type: return

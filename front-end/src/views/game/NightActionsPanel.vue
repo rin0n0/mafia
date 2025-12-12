@@ -17,9 +17,9 @@
             </button>
         </div>
     </div>
-    <div v-if="!isAlive">
+    <div v-else-if="!isAlive" class="night-wait-panel">
         <h3>Вы мертвы</h3>
-        <p>Наблюдайте за тем, как все пытаются выжить без вас.</p>
+        <p>Ожидайте наступления утра.</p>
     </div>
     <div v-else class="night-wait-panel">
         <h3>Ночь в городе...</h3>
@@ -104,6 +104,7 @@ const submitAction = () => {
 .night-actions-panel,
 .night-wait-panel {
     background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(6px);
     border: 2px solid var(--input-border-color);
     border-radius: 10px;
     padding: 1.5rem;

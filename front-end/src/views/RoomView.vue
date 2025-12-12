@@ -264,7 +264,9 @@ const handleUpdateEnvironment = (newEnvironment: string | null) => {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background: radial-gradient(circle, rgba(0, 0, 0, 0.2) 0%, rgba(40, 0, 0, 0.6) 80%, rgba(0, 0, 0, 0.9) 100%);
+  background-image: url('@/assets/background_gray.png');
+  background-position: center center;
+  background-size: cover;
   z-index: -1;
   pointer-events: none;
 }

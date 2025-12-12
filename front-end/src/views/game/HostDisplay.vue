@@ -14,9 +14,9 @@ const { displayedText, isTyping } = useTypewriter(() => props.message);
 <style scoped>
 .host-display {
     background: var(--input-bg-color);
+    backdrop-filter: blur(6px);
     border: 2px solid var(--input-border-color);
     border-radius: 10px;
-
     padding: 1.5rem 2rem;
     text-align: center;
     width: 100%;
