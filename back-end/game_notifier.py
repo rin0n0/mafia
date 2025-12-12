@@ -17,10 +17,15 @@ class GameNotifier:
         if not self._connection_manager:
             logger.warning(f"Room {room.room_id}: ConnectionManager is not set.")
             return
+        players_snapshot = list(room.players)
 
-        for player in room.players:
-            if self._connection_manager.is_client_connected(room.room_id, player.client_id):
+        for player in players_snapshot:
+            if not self._connection_manager.is_client_connected(room.room_id, player.client_id):
+                continue
+
+            try:
                 personalized_view = self._create_personalized_room_view(room, for_client_id=player.client_id)
+                
                 message = WsMessage(
                     type="personal_state_update",
                     payload=personalized_view.model_dump()
@@ -28,6 +33,8 @@ class GameNotifier:
                 await self._connection_manager.send_personal_message(
                     room.room_id, player.client_id, message.model_dump_json()
                 )
+            except Exception as e:
+                logger.error(f"Failed to send update to player {player.name} ({player.client_id}) in room {room.room_id}: {e}", exc_info=True)
 
     async def send_personal_event(self, room_id: str, client_id: str, text: str):
         message = WsMessage(type="personal_event", payload={"text": text})

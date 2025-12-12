@@ -97,7 +97,7 @@ const roleSubtitleMap: Record<string, string> = {
   citizen: "Ваша цель — найти и казнить всю мафию.",
   doctor: "Каждую ночь вы можете спасти кого-то от смерти. Помогайте мирным жителям.",
   comissar: "Каждую ночь вы можете проверить одного игрока. Истрибите мафию.",
-  whore: "Каждую ночь вы можете лишить одного игрока голоса и действия"
+  whore: "Каждую ночь вы можете лишить одного игрока действия"
 };
 
 watch([() => gameStore.room?.status, () => gameStore.room?.phase], ([newStatus, newPhase], [oldStatus, oldPhase]) => {
@@ -160,9 +160,10 @@ const copyRoomId = async () => {
 const handlePlayerSelect = (playerName: string) => {
   const newSelectedPlayer = selectedPlayerName.value === playerName ? null : playerName;
   selectedPlayerName.value = newSelectedPlayer;
-  if (gameStore.isNightActionPhase) {
+  if (gameStore.isNightActionPhase || gameStore.isVotingPhase) {
     gameStore.selectTeamTarget(newSelectedPlayer);
   }
+
   if (gameStore.myPlayerHasActed) {
     setTimeout(() => { selectedPlayerName.value = null; }, 300);
   }

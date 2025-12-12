@@ -1,7 +1,7 @@
 import asyncio
 import json
 import logging
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 from google.genai import Client, types, errors
 
@@ -14,8 +14,8 @@ API_TIMEOUT = 12.0
 
 class AINarrator:
     def __init__(self):
-        self._api_key = settings.GEMINI_API_KEY
-        if not self._api_key:
+        self._default_api_key = settings.GEMINI_API_KEY
+        if not self._default_api_key:
             logger.warning("GEMINI_API_KEY is not set in .env file. AI Narrator will use fallback mode.")
 
         self._base_config = {
@@ -35,11 +35,13 @@ class AINarrator:
         self,
         context: AIContext,
         event_type: str,
-        event_data: Dict
+        event_data: Dict,
+        api_key: Optional[str] = None
     ) -> AINarration:
-        if not self._api_key:
-            return self._get_fallback_narration(event_type, event_data)
-
+        self._default_api_key = settings.GEMINI_API_KEY
+        effective_api_key = api_key if api_key else self._default_api_key
+        if not self._default_api_key:
+            logger.warning("GEMINI_API_KEY is not set in .env file. AI Narrator will use fallback mode.")
         try:
             async with asyncio.timeout(API_TIMEOUT):
                 system_instruction, contents = self._generate_prompt(context, event_type, event_data)
@@ -47,7 +49,7 @@ class AINarrator:
                 request_config = self._base_config.copy()
                 request_config["system_instruction"] = system_instruction
                 
-                async with Client(api_key=self._api_key).aio as aclient:
+                async with Client(api_key=effective_api_key).aio as aclient:
                     response = await aclient.models.generate_content(
                         model='gemini-flash-latest',
                         contents=contents,
@@ -188,28 +190,83 @@ class AINarrator:
     def _get_fallback_narration(self, event_type: str, event_data: Dict) -> AINarration:
         logger.info(f"Using fallback narration for event: {event_type}")
         winner = event_data.get('winner_team')
-        victim_name = event_data.get("victim_name", "один из жителей")
+        victim = event_data.get("victim_name", "один из жителей")
         
         base_templates = {
-            "game_start": AINarration(title="Начало игры", summary="Ведущий приветствует игроков.", narration="Добро пожаловать в игру. Город засыпает, открывая сцену для тайн и интриг. Сделайте свой первый ход."),
-            "night_kill": AINarration(title="Потеря в ночи", summary=f"Ночью был убит игрок {victim_name}.", narration=f"С наступлением утра город обнаружил, что {victim_name} стал очередной жертвой безжалостной мафии."),
-            "night_save": AINarration(title="На волосок от смерти", summary=f"Было совершено покушение на игрока {victim_name}, но он был спасен.", narration=f"Темные силы пытались унести еще одну жизнь, но {victim_name} чудом избежал гибели."),
-            "night_no_kill": AINarration(title="Затишье перед бурей", summary="Этой ночью никто не умер.", narration="Город провел ночь в напряженном затишье. Никто не был убит, но чувство опасности лишь усилилось."),
-            "night_start": AINarration(title="Наступает ночь", summary="Город засыпает.", narration="Тени удлиняются, и на улицы выходит зло. Мирные жители спешат по домам, надеясь пережить эту ночь."),
-            "day_start": AINarration(title="Новый день", summary="Город просыпается. Обсудите ночь.", narration="Солнце встает, освещая улицы. Жители собираются, чтобы обсудить ночные происшествия."),
-            "voting_start": AINarration(title="Время выбора", summary="Начинается голосование. Выберите того, кого считаете мафией", narration="Время разговоров прошло. Теперь городу предстоит сделать тяжелый выбор и решить, кто виновен."),
-            "lynch_victim": AINarration(title="Приговор толпы", summary=f"Дневным голосованием был казнен игрок {victim_name}.", narration=f"По итогам дневного голосования, гнев толпы обрушился на {victim_name}. Его судьба решена."),
-            "lynch_tie": AINarration(title="Ничья", summary="Голоса разделились.", narration="Мнения разделились поровну. Сегодня никто не будет казнен, и напряжение в городе только растет."),
-            "joke_voting_start": AINarration(title="Первые подозрения", summary="Кто кажется вам самым крутым?", narration="Пришло время поделиться первыми впечатлениями. Выберите того, кто кажется вам наиболее подозрительным."),
-            "joke_vote_result": AINarration(title="Подозрительный тип", summary=f"Самым крутым назвали игрока {victim_name}.", narration=f"Большинство с уважением смотрит на игрока {victim_name}. Пока что это ничего не значит."),
-            "joke_vote_tie": AINarration(title="Смешанные чувства", summary="Мнения о подозрительности разделились.", narration="Горожане не смогли определиться, кто выглядит подозрительнее всех. Кажется, никому нельзя доверять."),
-            "game_over": AINarration(title="Финал", summary=f"Игра завершена. Победители: {winner}.", narration="История этого города подошла к концу. Улицы опустели, и лишь ветер разносит эхо прошедших событий."),
+            "game_start": {
+                "title": "Начало игры",
+                "summary": "Ведущий приветствует игроков.",
+                "narration": "Добро пожаловать в игру. Город засыпает, открывая сцену для тайн и интриг. Сделайте свой первый ход."
+            },
+            "night_kill": {
+                "title": "Потеря в ночи",
+                "summary": f"Ночью был убит игрок {victim}.",
+                "narration": f"С наступлением утра город обнаружил, что {victim} стал очередной жертвой безжалостной мафии."
+            },
+            "night_save": {
+                "title": "На волосок от смерти",
+                "summary": f"Было совершено покушение на игрока {victim}, но он был спасен.",
+                "narration": f"Темные силы пытались унести еще одну жизнь, но {victim} чудом избежал гибели."
+            },
+            "night_no_kill": {
+                "title": "Затишье перед бурей",
+                "summary": "Этой ночью никто не умер.",
+                "narration": "Город провел ночь в напряженном затишье. Никто не был убит, но чувство опасности лишь усилилось."
+            },
+            "night_start": {
+                "title": "Наступает ночь",
+                "summary": "Город засыпает.",
+                "narration": "Тени удлиняются, и на улицы выходит зло. Мирные жители спешат по домам, надеясь пережить эту ночь."
+            },
+            "day_start": {
+                "title": "Новый день",
+                "summary": "Город просыпается.",
+                "narration": "Солнце встает, освещая улицы. Жители собираются, чтобы обсудить ночные происшествия."
+            },
+            "voting_start": {
+                "title": "Время выбора",
+                "summary": "Начинается голосование.",
+                "narration": "Время разговоров прошло. Теперь городу предстоит сделать тяжелый выбор и решить, кто виновен."
+            },
+            "lynch_victim": {
+                "title": "Приговор толпы",
+                "summary": f"Дневным голосованием был казнен игрок {victim}.",
+                "narration": f"По итогам дневного голосования, гнев толпы обрушился на {victim}. Его судьба решена."
+            },
+            "lynch_tie": {
+                "title": "Ничья",
+                "summary": "Голоса разделились.",
+                "narration": "Мнения разделились поровну. Сегодня никто не будет казнен, и напряжение в городе только растет."
+            },
+            "joke_voting_start": {
+                "title": "Первые подозрения",
+                "summary": "Кто кажется вам самым подозрительным?",
+                "narration": "Пришло время поделиться первыми впечатлениями. Выберите того, кто кажется вам наиболее подозрительным."
+            },
+            "joke_vote_result": {
+                "title": "Подозрительный тип",
+                "summary": f"Самым подозрительным назвали игрока {victim}.",
+                "narration": f"Большинство косо смотрит на игрока {victim}. Пока это ничего не значит, но осадок остался."
+            },
+            "joke_vote_tie": {
+                "title": "Смешанные чувства",
+                "summary": "Мнения о подозрительности разделились.",
+                "narration": "Горожане не смогли определиться, кто выглядит подозрительнее всех. Кажется, никому нельзя доверять."
+            },
+            "game_over": {
+                "title": "Финал",
+                "summary": f"Игра завершена. Победители: {winner}.",
+                "narration": "История этого города подошла к концу. Улицы опустели, и лишь ветер разносит эхо прошедших событий."
+            }
         }
+
         template = base_templates.get(event_type, {
             "title": "Событие",
             "summary": "Произошло игровое событие.",
             "narration": "Ведущий подводит итоги..."
         })
+
+
         extra_narrative_parts = []
         whore_target = event_data.get('whore_target_name')
         if whore_target and event_type in ["night_kill", "night_save", "night_no_kill"]:
@@ -217,6 +274,7 @@ class AINarrator:
                 f" Кроме того, {whore_target} провел ночь в очень приятной, но отвлекающей компании."
             )
         final_narration_text = template["narration"] + "".join(extra_narrative_parts)
+        
         return AINarration(
             title=template["title"],
             summary=template["summary"],

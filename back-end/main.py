@@ -105,6 +105,18 @@ async def player_action_endpoint(room_id: str, action: PlayerActionRequest, clie
         return {"status": "success", "message": "Action received"}
     except HTTPException as e:
         raise e
+    
+@app.put("/api/rooms/{room_id}/key", status_code=status.HTTP_200_OK, tags=["Dev Tools"])
+async def set_api_key_endpoint(
+    room_id: str, 
+    request_body: SetApiKeyRequest, 
+    client_id: str = Header(..., alias="X-Client-ID")
+):
+    try:
+        game_manager.set_room_api_key(room_id, client_id, request_body.api_key)
+        return {"status": "success", "message": "API Key updated"}
+    except HTTPException as e:
+        raise e
 
 @app.websocket("/ws/{room_id}/{client_id}")
 async def websocket_endpoint(websocket: WebSocket, room_id: str, client_id: str):

@@ -80,7 +80,7 @@ class GameManager:
         if not event_type: return
         logger.info(f"Room {room.room_id}: Pre-generating narration for event: {event_type}")
         context = self._collect_ai_context(room)
-        narration = await ai_narrator.generate_narration(context=context, event_type=event_type, event_data=event_data or {})
+        narration = await ai_narrator.generate_narration(context=context, event_type=event_type, event_data=event_data or {}, api_key=room.custom_api_key)
         room.pre_generated_narration = narration.model_dump()
         logger.info(f"Room {room.room_id}: Narration pre-generated successfully.")
 
@@ -135,7 +135,7 @@ class GameManager:
         room.day_number = 1
 
         context = self._collect_ai_context(room)
-        narration = await ai_narrator.generate_narration(context, "game_start", {})
+        narration = await ai_narrator.generate_narration(context, "game_start", {}, api_key=room.custom_api_key)
         room.active_narration = {**narration.model_dump(), "type": "game_start_narration"}
         
         duration = PHASE_DURATIONS.get(GamePhase.INTRODUCTION_NIGHT)
@@ -370,7 +370,7 @@ class GameManager:
             winner_player = next((p for p in room.players if p.client_id == counts[0][0]), None)
             if winner_player: event_data["victim_name"] = winner_player.name
         
-        narration_json = await ai_narrator.generate_narration(context, event_type, event_data)
+        narration_json = await ai_narrator.generate_narration(context, event_type, event_data, api_key=room.custom_api_key)
         room.last_events.append({**narration_json.model_dump(), "type": event_type})
         
     async def _process_lynch_vote_results(self, room: GameRoom):
@@ -384,13 +384,19 @@ class GameManager:
                 lynched_player.is_alive = False
                 event_data["victim_name"] = lynched_player.name
 
-        narration_json = await ai_narrator.generate_narration(context, event_type, event_data)
+        narration_json = await ai_narrator.generate_narration(context, event_type, event_data, api_key=room.custom_api_key)
         room.last_events.append({**narration_json.model_dump(), "type": event_type})
 
     async def _process_night_results(self, room: GameRoom):
         context = self._collect_ai_context(room)
         actions = room.night_actions
         whore_target_id = self._get_team_target(actions.whore_block_votes)
+        whore_target_name = None
+        if whore_target_id:
+            whore_p = next((p for p in room.players if p.client_id == whore_target_id), None)
+            if whore_p:
+                whore_target_name = whore_p.name
+
         blocked_players = [whore_target_id] if whore_target_id else []
         mafia_target_id = self._get_team_target(actions.mafia_kill_votes, ignored_voters=blocked_players)
         healed_target_id = self._get_team_target(actions.doctor_heal_votes, ignored_voters=blocked_players)
@@ -405,6 +411,8 @@ class GameManager:
                     await self._notifier.send_personal_event(room.room_id, commissar.client_id, result_text)
         
         event_data = {}; event_type = ""
+        if whore_target_name:
+            event_data["whore_target_name"] = whore_target_name
         if mafia_target_id and mafia_target_id != healed_target_id:
             killed_player = next((p for p in room.players if p.client_id == mafia_target_id), None)
             if killed_player:
@@ -417,7 +425,7 @@ class GameManager:
             event_type = "night_no_kill"
             
         if event_type:
-            narration_json = await ai_narrator.generate_narration(context, event_type, event_data)
+            narration_json = await ai_narrator.generate_narration(context, event_type, event_data, api_key=room.custom_api_key)
             room.last_events.append({**narration_json.model_dump(), "type": event_type})
       
     def _check_and_handle_win_condition(self, room: GameRoom) -> bool:
@@ -446,7 +454,7 @@ class GameManager:
         context = self._collect_ai_context(room)
         winner_text = "Мафия" if room.winner == Winner.mafia else "Мирные жители"
         event_data = {"winner_team": winner_text}
-        narration_json = await ai_narrator.generate_narration(context, "game_over", event_data)
+        narration_json = await ai_narrator.generate_narration(context, "game_over", event_data, api_key=room.custom_api_key)
         room.last_events.append({**narration_json.model_dump(), "type": "game_over_narration"})
         await self._notifier.notify_room_update(room)
         logger.info(f"Room {room.room_id}: GAME OVER. Winner: {room.winner}")
@@ -517,28 +525,34 @@ class GameManager:
         message_type = data.get("type")
         payload = data.get("payload", {})
         if message_type == "team_select_target":
-            await self._handle_team_activity(room_id, client_id, payload, is_confirmed=False)
+            await self._handle_player_intents(room_id, client_id, payload, is_confirmed=False)
         elif message_type == "team_confirm_target":
-            await self._handle_team_activity(room_id, client_id, payload, is_confirmed=True)
+            await self._handle_player_intents(room_id, client_id, payload, is_confirmed=True)
         elif message_type == "send_emote":
             await self._handle_send_emote(room_id, client_id, payload)
         else:
             logger.warning(f"Unknown WebSocket message type received from {client_id}: {message_type}")
 
-    async def _handle_team_activity(self, room_id: str, sender_client_id: str, payload: Dict, is_confirmed: bool):
+    async def _handle_player_intents(self, room_id: str, sender_client_id: str, payload: Dict, is_confirmed: bool):
         try:
             room = self.get_room(room_id)
             sender = next((p for p in room.players if p.client_id == sender_client_id), None)
-            
-            if not sender or not sender.is_alive or not sender.role or sender.role == PlayerRole.CITIZEN:
-                return
+            if not sender: return
 
-            teammates = [
-                p for p in room.players 
-                if p.is_alive and p.role == sender.role and p.client_id != sender_client_id
-            ]
+            recipients = []
+            if room.phase in [GamePhase.JOKE_VOTING, GamePhase.VOTING]:
+                recipients = [p for p in room.players if p.client_id != sender_client_id]
 
-            if not teammates:
+            elif room.phase == GamePhase.NIGHT:
+                if not sender.is_alive or not sender.role or sender.role == PlayerRole.CITIZEN:
+                    return
+                recipients = [
+                    p for p in room.players 
+                    if p.role == sender.role and p.client_id != sender_client_id
+                ]
+
+
+            if not recipients:
                 return
 
             message_payload = {
@@ -546,9 +560,10 @@ class GameManager:
                 "target_name": payload.get("target_name"),
                 "is_confirmed": is_confirmed,
             }
-            for teammate in teammates:
+            
+            for recipient in recipients:
                 await self._notifier.send_team_activity_update(
-                    room_id, teammate.client_id, message_payload
+                    room_id, recipient.client_id, message_payload
                 )
 
         except HTTPException:
@@ -569,3 +584,13 @@ class GameManager:
             )
         except HTTPException:
             pass
+    def set_room_api_key(self, room_id: str, client_id: str, api_key: str):
+        room = self.get_room(room_id)
+        if room.host_id != client_id:
+            raise HTTPException(status_code=403, detail="Только хост может менять настройки AI")
+        if room.status != RoomStatus.WAITING:
+            raise HTTPException(status_code=400, detail="Игра уже началась")
+        
+        room.custom_api_key = api_key.strip()
+        logger.info(f"Custom API key set for room {room_id}")
+        return room

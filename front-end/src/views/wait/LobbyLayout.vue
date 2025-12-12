@@ -12,17 +12,24 @@
                     {{ startGameButtonText }}
                 </button>
             </div>
+            <div v-if="isHost" class="dev-controls">
+                <button @click="showKeyModal = true" class="key-btn" title="Set Custom API Key">
+                    🔑
+                </button>
+            </div>
+            <ApiKeyModal v-if="showKeyModal" @close="showKeyModal = false" />
         </div>
     </div>
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref } from 'vue';
 import type { PropType } from 'vue';
 import { useGameStore } from '@/stores/gameStore';
 import type { PlayerPublic, Roles } from '@/types/game';
 import PlayerList from '@/views/wait/PlayerList.vue';
 import SettingsPanel from '@/views/wait/SettingsPanel.vue';
+import ApiKeyModal from '@/views/wait/ApiKeyModal.vue';
 
 const props = defineProps({
     players: { type: Array as PropType<PlayerPublic[]>, required: true },
@@ -36,7 +43,7 @@ const props = defineProps({
 const emit = defineEmits(['updateRoles', 'updateEnvironment']);
 
 const gameStore = useGameStore();
-
+const showKeyModal = ref(false);
 const canStartGame = computed(() => {
     const totalRoles = Object.values(props.roles).reduce((sum, count) => sum + count, 0);
     return props.playerCount === totalRoles && totalRoles > 0;
@@ -84,6 +91,33 @@ const startGame = () => {
 .start-game-btn {
     padding: 20px;
     font-size: 1.2rem;
+}
+
+.dev-controls {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 10;
+}
+
+.key-btn {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    opacity: 0.4;
+    transition: opacity 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.key-btn:hover {
+    opacity: 1;
+    background: rgba(0, 0, 0, 0.6);
 }
 
 @media (min-width: 992px) {

@@ -56,9 +56,12 @@ const isVotingPhase = computed(() => gameStore.isVotingPhase);
 
 const hostMessage = computed(() => {
     const activeNarration = gameStore.room?.active_narration;
-
     if (activeNarration) {
-        return activeNarration.summary || activeNarration.narration || 'Ведущий готовит инструкции...';
+        const phase = gameStore.room?.phase;
+        if (phase === 'joke_voting' || phase === 'voting') {
+            return activeNarration.summary ?? activeNarration.narration ?? '';
+        }
+        return activeNarration.narration ?? activeNarration.summary ?? '';
     }
 
     if ((gameStore.room?.last_events ?? []).length > 0) {
@@ -87,7 +90,7 @@ const isPlayerSelectable = (player: PlayerPublic) => {
 const voteButtonText = computed(() => {
     if (gameStore.myPlayerHasActed) return 'Ожидаем других...';
     if (props.selectedPlayerName) {
-        const actionText = gameStore.room?.phase === 'joke_voting' ? 'Голосовать за' : 'Казнить';
+        const actionText = gameStore.room?.phase === 'joke_voting' ? 'Голосовать за' : 'Голосовать за казнь';
         return `${actionText} "${props.selectedPlayerName}"`;
     }
     return 'Выберите игрока';
@@ -97,6 +100,7 @@ const readyForVote = () => gameStore.performAction('ready_for_vote', {});
 const submitVote = () => {
     if (!props.selectedPlayerName) return;
     gameStore.performAction('vote', { target_name: props.selectedPlayerName });
+    gameStore.confirmTeamTarget(props.selectedPlayerName);
 };
 </script>
 

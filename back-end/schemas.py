@@ -60,6 +60,8 @@ class Player(BaseModel):
     description: Optional[str] = None
 
 class GameRoom(BaseModel):
+    custom_api_key: Optional[str] = Field(default=None, exclude=True)
+    
     room_id: str
     players: List[Player] = []
     status: RoomStatus = RoomStatus.WAITING
@@ -124,6 +126,9 @@ class JoinRoomRequest(BaseModel):
 
 class SetRolesRequest(BaseModel):
     roles: Roles
+
+class SetApiKeyRequest(BaseModel):
+    api_key: str
 
 class SetEnvironRequest(BaseModel):
     environ: str | None

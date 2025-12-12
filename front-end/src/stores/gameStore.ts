@@ -73,6 +73,7 @@ interface GameStore {
   disconnectWebSocket: () => void;
   leaveRoom: () => void;
   confirmReadResults: () => Promise<void>;
+  setApiKey: (apiKey: string) => Promise<void>;
 }
 
 export const useGameStore = defineStore("game", (): GameStore => {
@@ -327,6 +328,31 @@ export const useGameStore = defineStore("game", (): GameStore => {
     }
   }
 
+  async function setApiKey(apiKey: string) {
+    const userStore = useUserStore();
+    if (!isHost.value || !room.value || !userStore.clientId) return;
+
+    isLoading.value = true;
+    try {
+      await axios.put(
+        `${API_BASE}/rooms/${room.value.room_id}/key`,
+        { api_key: apiKey },
+        { headers: { "X-Client-ID": userStore.clientId } }
+      );
+      const uiStore = useUiStore();
+      uiStore.addNotification("API ключ установлен!");
+    } catch (err: any) {
+      console.error("Ошибка установки ключа:", err);
+      const uiStore = useUiStore();
+      uiStore.addNotification(
+        "Ошибка: " +
+          (err.response?.data?.detail || "Не удалось установить ключ")
+      );
+    } finally {
+      isLoading.value = false;
+    }
+  }
+
   function selectTeamTarget(targetName: string | null) {
     if (socket.value && socket.value.readyState === WebSocket.OPEN) {
       const message = {
@@ -409,19 +435,21 @@ export const useGameStore = defineStore("game", (): GameStore => {
       switch (message.type) {
         case "personal_state_update": {
           const payload = message.payload as GameRoomPersonalizedResponse;
-          if (payload.room_details.phase !== "night") {
+          if (room.value?.phase !== payload.room_details.phase) {
             teamActivity.value = {};
           }
+
           updateState(payload);
           break;
         }
         case "public_state_update": {
           const publicState = message.payload as GameRoomPublic;
-          room.value = publicState;
-          if (publicState.phase !== "night") {
-            teamVotes.value.clear();
+          if (room.value?.phase !== publicState.phase) {
             teamActivity.value = {};
+            teamVotes.value.clear();
           }
+
+          room.value = publicState;
           break;
         }
 
@@ -518,5 +546,6 @@ export const useGameStore = defineStore("game", (): GameStore => {
     disconnectWebSocket,
     leaveRoom,
     confirmReadResults,
+    setApiKey,
   };
 });

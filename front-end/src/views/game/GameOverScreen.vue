@@ -40,7 +40,6 @@
                     </ul>
                 </div>
             </div>
-
             <button @click="playAgain" class="btn primary-btn">
                 Вернуться в лобби
             </button>
@@ -80,7 +79,6 @@ const epilogue = computed(() => {
     return gameStore.room.last_events.find((e: GameEvent) => e.type === 'game_over_narration') || null;
 });
 
-
 const playAgain = () => {
     gameStore.leaveRoom();
 };
@@ -90,22 +88,23 @@ const playAgain = () => {
 .game-over-overlay {
     position: fixed;
     inset: 0;
+    backdrop-filter: blur(12px);
     display: flex;
     align-items: center;
     justify-content: center;
     z-index: 300;
     animation: fadeIn 0.8s ease-out;
-    padding: 20px;
+    padding: 16px;
 }
 
 .game-over-card {
     background: var(--input-bg-color);
     border: 2px solid var(--input-border-color);
-    backdrop-filter: blur(6px);
     border-radius: 16px;
-    padding: 2.5rem;
+    padding: 1.5rem;
     width: 100%;
-    max-width: 800px;
+    max-height: 90vh;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -114,14 +113,14 @@ const playAgain = () => {
 
 .header-group {
     text-align: center;
-    margin-bottom: 2.5rem;
+    margin-bottom: 2rem;
     width: 100%;
 }
 
 .title {
-    font-size: 1.5rem;
+    font-size: 1.2rem;
     text-transform: uppercase;
-    letter-spacing: 4px;
+    letter-spacing: 2px;
     color: var(--secondary-text-color);
     margin: 0;
     opacity: 0.8;
@@ -129,17 +128,17 @@ const playAgain = () => {
 
 .divider {
     height: 2px;
-    width: 60px;
+    width: 40px;
     background: var(--input-border-color);
-    margin: 1rem auto;
+    margin: 0.8rem auto;
 }
 
 .winner-announcement {
-    font-size: 3rem;
+    font-size: 2rem;
     margin: 0;
     font-weight: 900;
     text-transform: uppercase;
-    letter-spacing: 2px;
+    letter-spacing: 1px;
     line-height: 1.1;
     text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
 }
@@ -155,16 +154,16 @@ const playAgain = () => {
 .narrator-epilogue {
     background: rgba(0, 0, 0, 0.3);
     border-left: 4px solid var(--input-border-color);
-    padding: 1.5rem;
+    padding: 1rem;
     border-radius: 0 8px 8px 0;
-    margin-bottom: 2.5rem;
+    margin-bottom: 2rem;
     width: 100%;
     text-align: left;
 }
 
 .epilogue-title {
     margin: 0 0 0.5rem 0;
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     color: var(--primary-text-color);
     font-weight: 700;
 }
@@ -173,31 +172,31 @@ const playAgain = () => {
     margin: 0;
     color: var(--secondary-text-color);
     font-style: italic;
-    line-height: 1.5;
-    font-size: 1.05rem;
+    line-height: 1.4;
+    font-size: 0.95rem;
 }
 
 .roles-reveal {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 2rem;
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
     width: 100%;
-    margin-bottom: 2.5rem;
+    margin-bottom: 2rem;
 }
 
 .team-column {
     background: rgba(255, 255, 255, 0.03);
     border-radius: 12px;
-    padding: 1.5rem;
+    padding: 1rem;
     border: 1px solid rgba(255, 255, 255, 0.05);
     display: flex;
     flex-direction: column;
 }
 
 .team-title {
-    font-size: 1.2rem;
+    font-size: 1.1rem;
     text-transform: uppercase;
-    margin: 0 0 1rem 0;
+    margin: 0 0 0.8rem 0;
     padding-bottom: 0.5rem;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
     text-align: center;
@@ -220,21 +219,20 @@ const playAgain = () => {
     color: #90caf9;
 }
 
-
 .player-list {
     list-style: none;
     padding: 0;
     margin: 0;
     display: flex;
     flex-direction: column;
-    gap: 0.8rem;
+    gap: 0.6rem;
 }
 
 .player-item {
     display: flex;
     justify-content: space-between;
     align-items: baseline;
-    font-size: 1.1rem;
+    font-size: 1rem;
 }
 
 .player-name {
@@ -249,7 +247,7 @@ const playAgain = () => {
 }
 
 .player-role {
-    font-size: 0.9rem;
+    font-size: 0.85rem;
     color: var(--secondary-text-color);
     text-transform: uppercase;
     font-weight: 500;
@@ -264,13 +262,23 @@ const playAgain = () => {
 
 .primary-btn {
     width: 100%;
-    max-width: 400px;
-    padding: 18px;
-    font-size: 1.2rem;
+    padding: 16px;
+    font-size: 1.1rem;
+    background-color: var(--primary-brand-color);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: auto;
 }
 
 .primary-btn:hover {
     transform: translateY(-2px);
+    background-color: var(--primary-brand-hover-color);
 }
 
 @keyframes fadeIn {
@@ -286,7 +294,7 @@ const playAgain = () => {
 @keyframes scaleIn {
     from {
         opacity: 0;
-        transform: scale(0.9);
+        transform: scale(0.95);
     }
 
     to {
@@ -295,18 +303,55 @@ const playAgain = () => {
     }
 }
 
-@media (max-width: 768px) {
-    .roles-reveal {
-        grid-template-columns: 1fr;
-        gap: 1.5rem;
+
+@media (min-width: 768px) {
+    .game-over-card {
+        padding: 3rem;
+        max-width: 800px;
+    }
+
+    .title {
+        font-size: 1.5rem;
+        letter-spacing: 4px;
     }
 
     .winner-announcement {
-        font-size: 2.2rem;
+        font-size: 3.5rem;
     }
 
-    .game-over-card {
+    .narrator-epilogue {
         padding: 1.5rem;
+    }
+
+    .epilogue-title {
+        font-size: 1.25rem;
+    }
+
+    .epilogue-text {
+        font-size: 1.1rem;
+    }
+
+    .roles-reveal {
+        grid-template-columns: 1fr 1fr;
+        gap: 2rem;
+    }
+
+    .team-column {
+        padding: 1.5rem;
+    }
+
+    .team-title {
+        font-size: 1.3rem;
+    }
+
+    .player-item {
+        font-size: 1.15rem;
+    }
+
+    .primary-btn {
+        max-width: 400px;
+        font-size: 1.2rem;
+        padding: 18px;
     }
 }
 </style>
