@@ -250,11 +250,25 @@ const handleUpdateEnvironment = (newEnvironment: string | null) => {
 
 .room-view.is-dead::before,
 .room-view.is-dead::after {
-  filter: grayscale(100%) brightness(0.6);
+  filter: grayscale(100%) brightness(0, 6);
 }
 
 .room-view.is-dead .room-content {
   position: relative;
+}
+
+.room-view.is-dead::after {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-image: url('@/assets/background_gray.png');
+  background-position: center center;
+  background-size: cover;
+  z-index: -1;
+  pointer-events: none;
 }
 
 .room-view.is-dead::before {
@@ -271,10 +285,7 @@ const handleUpdateEnvironment = (newEnvironment: string | null) => {
   pointer-events: none;
 }
 
-.room-view.is-dead .header h1 {
-  color: #888;
-  text-shadow: none;
-}
+
 
 .room-content {
   width: 100%;

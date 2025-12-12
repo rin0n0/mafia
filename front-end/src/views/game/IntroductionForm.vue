@@ -56,6 +56,7 @@ const submit = () => { emit('submitDescription', description.value); };
     display: flex;
     flex-direction: column;
     background: rgba(0, 0, 0, 0.2);
+    backdrop-filter: blur(6px);
     border: 2px solid var(--input-border-color);
     border-radius: 10px;
     padding: 1.5rem 2rem;

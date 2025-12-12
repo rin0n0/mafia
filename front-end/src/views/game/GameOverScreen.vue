@@ -101,6 +101,7 @@ const playAgain = () => {
 .game-over-card {
     background: var(--input-bg-color);
     border: 2px solid var(--input-border-color);
+    backdrop-filter: blur(6px);
     border-radius: 16px;
     padding: 2.5rem;
     width: 100%;
