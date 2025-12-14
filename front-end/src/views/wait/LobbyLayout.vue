@@ -96,7 +96,7 @@ const startGame = () => {
 .dev-controls {
     position: absolute;
     top: 10px;
-    left: 10px;
+    right: 10px;
     z-index: 10;
 }
 

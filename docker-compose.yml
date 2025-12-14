@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  xray: 
+    image: ghcr.io/sagernet/sing-box:latest
+    container_name: mafia_proxy
+    volumes:
+      - ./xray/config.json:/etc/sing-box/config.json
+    restart: always
+    command: run -c /etc/sing-box/config.json
+    networks:
+      - mafia-net
+
+  backend:
+    build: ./back-end
+    container_name: mafia_backend
+    depends_on:
+      - xray
+    environment:
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - HTTPS_PROXY=http://xray:10809
+      - HTTP_PROXY=http://xray:10809
+      - ALL_PROXY=http://xray:10809
+    restart: always
+    networks:
+      - mafia-net
+
+  frontend:
+    build: ./front-end
+    container_name: mafia_frontend
+    depends_on:
+      - backend
+    restart: always
+    networks:
+      - mafia-net
+  telegram-bot:
+    build: ./telegram-bot
+    container_name: mafia_telegram_bot
+    restart: always
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+      - PUBLIC_URL=${PUBLIC_URL} 
+    depends_on:
+      - frontend
+    networks:
+      - mafia-net
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: mafia_tunnel
+    restart: always
+    command: tunnel --protocol http2 --edge-ip-version 4 run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
+    depends_on:
+      - frontend
+    networks:
+      - mafia-net
+
+networks:
+  mafia-net:
+    driver: bridge

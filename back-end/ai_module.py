@@ -31,43 +31,59 @@ class AINarrator:
             "response_mime_type": "application/json",
         }
 
+    def _generate_narration_sync(self, context: AIContext, event_type: str, event_data: Dict, api_key: str) -> AINarration:
+        try:
+            system_instruction, contents = self._generate_prompt(context, event_type, event_data)
+            
+            request_config = self._base_config.copy()
+            request_config["system_instruction"] = system_instruction
+            
+            client = Client(api_key=api_key)
+            response = client.models.generate_content(
+                model='gemini-flash-latest',
+                contents=contents,
+                config=request_config
+            )
+            
+            try:
+                parsed_json = json.loads(response.text)
+                return AINarration(**parsed_json)
+            except (json.JSONDecodeError, TypeError) as e:
+                logger.error(f"AI Narrator (sync) failed to parse JSON. Error: {e}. Response: {response.text}")
+                return self._get_fallback_narration(event_type, event_data)
+        except Exception as e:
+            logger.error(f"An error occurred in AI Narrator (sync): {e}", exc_info=True)
+            return self._get_fallback_narration(event_type, event_data)
+        
     async def generate_narration(
         self,
         context: AIContext,
         event_type: str,
         event_data: Dict,
-        api_key: Optional[str] = None
+        api_key: str = None
     ) -> AINarration:
-        self._default_api_key = settings.GEMINI_API_KEY
         effective_api_key = api_key if api_key else self._default_api_key
-        if not self._default_api_key:
-            logger.warning("GEMINI_API_KEY is not set in .env file. AI Narrator will use fallback mode.")
-        try:
-            async with asyncio.timeout(API_TIMEOUT):
-                system_instruction, contents = self._generate_prompt(context, event_type, event_data)
-                
-                request_config = self._base_config.copy()
-                request_config["system_instruction"] = system_instruction
-                
-                async with Client(api_key=effective_api_key).aio as aclient:
-                    response = await aclient.models.generate_content(
-                        model='gemini-flash-latest',
-                        contents=contents,
-                        config=request_config
-                    )
-                    
-                    try:
-                        parsed_json = json.loads(response.text)
-                        return AINarration(**parsed_json)
-                    except (json.JSONDecodeError, TypeError) as e:
-                        logger.error(f"AI Narrator failed to parse JSON from response. Error: {e}. Response text: {response.text}")
-                        return self._get_fallback_narration(event_type, event_data)
 
-        except asyncio.TimeoutError:
-            logger.error(f"AI Narrator timed out after {API_TIMEOUT} seconds.")
+        if not effective_api_key:
             return self._get_fallback_narration(event_type, event_data)
-        except (errors.APIError, Exception) as e:
-            logger.error(f"An error occurred in AI Narrator: {e}", exc_info=True)
+
+        try:
+            narration = await asyncio.wait_for(
+                asyncio.to_thread(
+                    self._generate_narration_sync,
+                    context,
+                    event_type,
+                    event_data,
+                    effective_api_key
+                ),
+                timeout=API_TIMEOUT
+            )
+            return narration
+        except asyncio.TimeoutError:
+            logger.error(f"AI Narrator task timed out after {API_TIMEOUT} seconds (from to_thread).")
+            return self._get_fallback_narration(event_type, event_data)
+        except Exception as e:
+            logger.error(f"An unexpected error occurred in AI Narrator wrapper: {e}", exc_info=True)
             return self._get_fallback_narration(event_type, event_data)
 
     def _generate_prompt(self, context: AIContext, event_type: str, event_data: Dict) -> tuple[str, List[types.Content]]:

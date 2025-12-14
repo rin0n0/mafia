@@ -31,8 +31,9 @@ function updateFullState(
   error.value = null;
 }
 
-const API_BASE = "http://127.0.0.1:8000/api";
-const WS_BASE = "ws://127.0.0.1:8000/ws";
+const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+const API_BASE = "/api";
+const WS_BASE = `${wsProtocol}//${window.location.host}/ws`;
 
 interface GameStore {
   room: Ref<GameRoomPublic | null>;
